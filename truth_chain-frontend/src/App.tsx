@@ -8,7 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Home from './pages/HomePage';
 import Navbar from './components/Navigation/Navbar';
-import { Footer } from './components/Footer/Footer';
+import  Footer  from './components/Footer/Footer';
 import SignUpPage from './pages/Signup';
 import HowItWorks from './pages/HowItWorks';
 
