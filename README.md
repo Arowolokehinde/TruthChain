@@ -2,6 +2,8 @@
 
 A blockchain-based solution for verifying the authenticity and origin of digital content using the Stacks blockchain.
 
+Smart contract URL Deployed on testnet - https://explorer.hiro.so/txid/0xfbb882c008b7b31a894edca841129706db1639ebe6f56a40843570a28b3f518c?chain=testnet
+
 ## Overview
 
 The Decentralized Content Provenance System allows content creators to register their digital content on the Stacks blockchain, providing an immutable record of ownership and authenticity. Consumers can verify the integrity of content and confirm its original creator, while platforms can integrate verification capabilities into their content management systems.
