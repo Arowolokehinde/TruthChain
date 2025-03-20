@@ -1,148 +1,213 @@
-## Tip Stacks
-TiP Stacks is a decentralized tipping platform built on the Stacks blockchain built with AI. It enables users to send and receive tips seamlessly, with advanced features like user statistics, rewards, identity verification, and platform fee handling. Designed for efficiency and transparency, this smart contract promotes decentralized financial interaction.
+# Decentralized Content Provenance System [truth_chain]
 
----
+A blockchain-based solution for verifying the authenticity and origin of digital content using the Stacks blockchain.
 
-### Deployed smart contract url
- https://explorer.hiro.so/txid/0x3cd2275570b99fc8df9168c917ae65c05f44494ef05f8c8ab438e150923badf8?chain=testnet
- ST3P8GST1CH1QTD2W8VQ9BT60EPBQFWDN9DRGBR64.STX-TIPPPS
+Smart contract URL Deployed on testnet - https://explorer.hiro.so/txid/0xfbb882c008b7b31a894edca841129706db1639ebe6f56a40843570a28b3f518c?chain=testnet
 
+## Overview
+
+The Decentralized Content Provenance System allows content creators to register their digital content on the Stacks blockchain, providing an immutable record of ownership and authenticity. Consumers can verify the integrity of content and confirm its original creator, while platforms can integrate verification capabilities into their content management systems.
 
 ## Features
 
-### Key Features
-1. **Decentralized Tipping**: Enables users to tip others directly on the Stacks blockchain.
-2. **Platform Fees**: A percentage fee is deducted from each tip for platform sustainability.
-3. **Reward System**: Users earn reward points for tipping amounts exceeding a threshold.
-4. **User Statistics**:
-   - Total tips sent and received.
-   - Accumulated reward points.
-5. **Identity Management**: Links user addresses to usernames and verification status.
-6. **Transaction History**: Maintains a detailed log of tipping activities.
-7. **Error Handling**: Comprehensive error codes to handle edge cases and ensure contract integrity.
+- **Content Registration**: Hash and register digital content (articles, images, videos) on the Stacks blockchain
+- **Content Verification**: Verify the authenticity and integrity of published content
+- **Creator Portfolios**: View all verified content from a specific creator
+- **Content Revocation**: Allow creators to mark content as retracted or outdated
+- **Platform Integration**: APIs and SDKs for content platforms to integrate verification capabilities
 
----
+## User Workflows
 
-## Firstly, you have to connect wallet, then you would join community and then you can view your dashboard
+### 1. Content Creator Workflow
 
-<img width="1440" alt="Screenshot 2024-12-14 at 9 46 29 PM" src="https://github.com/user-attachments/assets/477ccfba-7090-420d-8aa3-4a03a8351300" />
+#### Registration Process
 
-<img width="1439" alt="Screenshot 2024-12-14 at 9 46 47 PM" src="https://github.com/user-attachments/assets/62c0f69c-9348-48bc-8b93-f42f585f3865" />
+1. **Content Creation**
+   - Creator produces digital content (article, image, video, etc.)
+   - Creator uploads content to the application
 
-## Smart Contract Components
+2. **Content Preparation**
+   - System generates SHA-256 hash of the content
+   - System displays the hash to the creator for confirmation
+   - Creator connects their Stacks wallet to the application
 
-### Constants
-- `CONTRACT_OWNER`: The owner's principal address.
-- `PLATFORM_FEE_PERCENTAGE`: Fee percentage (default: 5%).
-- `MAX_TIP_AMOUNT`: Maximum allowable tip amount (default: 1,000 STX).
-- `REWARD_THRESHOLD`: Minimum tip amount to qualify for rewards (default: 1 STX).
-- `REWARD_RATE`: Points earned per qualifying tip (default: 10 points).
+3. **Signing & Registration**
+   - Creator signs the content hash using their Stacks wallet
+   - System prepares a transaction to call the `register-content` function
+   - Creator approves transaction and pays Stacks gas fee
+   - System submits transaction to the Stacks blockchain
+   - Creator receives confirmation with verification ID once transaction is mined
 
-### Data Structures
-- **`user-tip-stats`**: Tracks individual user statistics.
-  ```clojure
-  { total-tips-sent: uint, total-tips-received: uint, reward-points: uint }
-  ```
-- **`tip-history`**: Logs transactions.
-  ```clojure
-  { sender: principal, recipient: principal, timestamp: uint, amount: uint, fee: uint, token-type: string }
-  ```
-- **`user-identity`**: Stores user profiles.
-  ```clojure
-  { username: string, verified: bool }
-  ```
+4. **Content Publication**
+   - Creator publishes content with attached verification link/badge
+   - Verification link leads to a page showing blockchain proof of authenticity
 
-### Key Functions
-#### Public Functions
-1. **`tip`**:
-   - Transfers a tip to a recipient, deducting a platform fee.
-   - Updates user stats and logs the transaction.
-   - Example:
-     ```clojure
-     (tip 'SP123456789' u1000 "STX")
-     ```
+#### Content Management
 
-2. **`set-user-identity`**:
-   - Registers or updates a user's username.
-   - Example:
-     ```clojure
-     (set-user-identity "Alice")
-     ```
+1. **View Published Content**
+   - Creator logs into dashboard to see all registered content
+   - Dashboard shows registration dates, verification status, and view counts
 
-3. **`update-user-reward-points`**:
-   - Updates reward points for a user manually.
-   - Example:
-     ```clojure
-     (update-user-reward-points 'SP123456789' u20)
-     ```
+2. **Content Revocation**
+   - Creator selects content from dashboard
+   - Creator initiates revocation (calls `revoke-content` function)
+   - Creator approves transaction and pays Stacks gas fee
+   - Content remains on blockchain but is marked as inactive
 
-4. **Read-Only Functions**:
-   - `get-user-tip-stats`: Retrieve a user's tipping statistics.
-   - `get-user-identity`: Fetch a user's identity information.
-   - `get-transaction-logs`: Access logs of a specific transaction.
-  
-   
-<img width="1440" alt="Screenshot 2024-12-14 at 9 50 48 PM" src="https://github.com/user-attachments/assets/149ed8bd-ff1e-4e7f-b203-ae9d4a8b0f6f" />
+### 2. Content Consumer Workflow
 
-#### Private Functions
-- **`process-tip-transfer`**:
-  Handles the actual fund transfer and fee deduction.
-- **`calculate-platform-fee`**:
-  Computes the platform fee from the tip amount.
-- **`update-sender-stats` & `update-recipient-stats`**:
-  Updates user statistics after a successful tip.
-- **`update-reward-points`**:
-  Grants reward points to eligible users.
+#### Content Verification
 
----
+1. **Encountering Content**
+   - Consumer sees content with a verification badge/link
+   - Consumer clicks on verification badge to check authenticity
 
-## Installation & Deployment
+2. **Verification Process**
+   - Verification page loads content and recalculates hash
+   - System calls `verify-content` function with the calculated hash
+   - System compares on-chain record with current content
 
-1. **Environment Setup**:
-   Ensure you have:
-   - Clarity development tools installed.
-   - A connected Stacks wallet.
+3. **Verification Results**
+   - If match: Consumer sees green verification badge showing:
+     - Original author's Stacks address (with optional identity verification)
+     - Registration timestamp
+     - Content integrity status (unchanged)
+   - If mismatch: Consumer sees warning that content has been modified
+   - If revoked: Consumer sees notice that content has been retracted by creator
 
-2. **Deploy**:
-   Deploy the contract using the Stacks CLI or your preferred IDE:
+#### Author Verification
+
+1. **Checking Creator's Portfolio**
+   - Consumer can view all content by same creator
+   - System calls `get-author-content` function with creator's address
+   - Displays list of verified content from the same creator
+
+### 3. Platform Integration Workflow
+
+#### API Integration
+
+1. **Setup Process**
+   - Platform registers for API access
+   - Platform integrates SDK into their CMS or content workflow
+
+2. **Automated Registration**
+   - When publishers create content on the platform:
+     - Platform automatically hashes content
+     - Platform requests signature from publisher's wallet
+     - Platform calls `register-content` function
+     - Platform attaches verification badge to published content
+
+3. **Real-time Verification**
+   - When content is viewed:
+     - Platform automatically verifies content integrity
+     - Platform displays verification status to readers
+     - Platform warns of altered content
+
+4. **Content Feed Filtering**
+   - Platform can filter feeds to show only verified content
+   - Platform can highlight verified creators
+   - Platform displays verification stats in analytics
+
+## Smart Contract Functions
+
+The system relies on the following core smart contract functions:
+
+- `register-content`: Records content hash, creator address, and timestamp
+- `verify-content`: Checks if content hash exists and returns registration details
+- `revoke-content`: Marks content as retracted by the original creator
+- `get-author-content`: Retrieves all content registered by a specific creator
+
+## Technical Implementation
+
+- Built on the Stacks blockchain
+- Content hashing using SHA-256
+- Digital signatures using Stacks wallet
+- Gas fees paid in Stacks cryptocurrency
+
+## Simplified Flow
+
+```
+Content Creator → Upload Content → Generate Hash → Sign Hash → 
+Call register-content → Transaction Confirmation → Receive Verification ID
+
+Consumer → View Content → Check Verification → Calculate Hash → 
+Call verify-content → Compare with Blockchain Record → Display Result
+
+Consumer → View Creator Profile → Call get-author-content → 
+Display All Verified Content → Validate Creator's History
+```
+
+## Getting Started
+
+### Frontend Installation
+
+1. **Clone the repository**
    ```bash
-   stacks deploy ./tip-stacks-enhanced.clar
+   git clone https://github.com/yourusername/decentralized-content-provenance.git
+   cd decentralized-content-provenance
    ```
 
-3. **Configuration**:
-   - Update the constants to match your platform's settings.
-   - Ensure the `CONTRACT_OWNER` address is correct.
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
----
+3. **Set up Tailwind CSS**
+   The project uses Tailwind CSS for styling. The configuration is already included in the project.
+   ```bash
+   # Tailwind CSS is already configured in the package.json
+   # Just ensure the dependencies are installed
+   npm install -D tailwindcss postcss autoprefixer
+   ```
 
-## Usage Guidelines
+4. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+   This will start the Vite development server. Navigate to `http://localhost:5173` to view the application.
 
-- **For Users**:
-  - Use the `tip` function to send tips.
-  - Query `get-user-tip-stats` for your statistics.
-  - Link your identity using `set-user-identity`.
+5. **Build for production**
+   ```bash
+   npm run build
+   ```
+   This will generate optimized production files in the `dist` directory.
 
-- **For Platform Owners**:
-  - Monitor platform fees and reward points.
-  - Handle user verification through `user-identity`.
+### Smart Contract Deployment
 
----
+[Smart contract deployment instructions to be added]
 
-## Error Handling
+## Documentation
 
-### Common Errors
-- **`ERR_INSUFFICIENT_FUNDS` (u1)**: Tip amount exceeds sender's balance.
-- **`ERR_INVALID_AMOUNT` (u2)**: Tip amount is invalid (e.g., zero or exceeds maximum).
-- **`ERR_TRANSFER_FAILED` (u3)**: Fund transfer failed due to network or balance issues.
-- **`ERR_REWARD_UPDATE_FAILED` (u4)**: Reward points update failed.
+[Links to detailed documentation to be added]
 
----
+## License
 
+MIT License
 
-<img width="1439" alt="Screenshot 2024-12-14 at 9 46 47 PM" src="https://github.com/user-attachments/assets/85a98fdc-fd57-4edb-9bd6-9143b7a92be2" />
+Copyright (c) 2025 Decentralized Content Provenance System
 
-## Future Enhancements
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. **Multi-token Support**: Extend tipping functionality to include other tokens.
-2. **Advanced Identity Verification**: Integrate with decentralized identity solutions.
-3. **Dynamic Reward Rates**: Implement tiered reward mechanisms based on user activity.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Contact
+
+For questions, support, or collaboration:
+
+- Email: [arowolokehinde231@gmail.com](mailto:arowolokehinde231@gmail.com)
+- GitHub: [github.com/yourusername](https://github.com/yourusername)
+- Discord: [Join our community](https://discord.gg/yourinvitelink)
