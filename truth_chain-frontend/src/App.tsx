@@ -8,7 +8,7 @@ import Login from './pages/Login';
 import Home from './pages/HomePage';
 import { AuthContextProvider } from './context/AuthContext';
 import Navbar from './components/Navigation/Navbar';
-import Footer  from './components/Footer/Footer';
+import  Footer  from './components/Footer/Footer';
 import SignUpPage from './pages/Signup';
 
 const App: React.FC = () => {
@@ -22,6 +22,7 @@ const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUpPage />} />
+              {/* Add more routes as you create the components */}
             </Routes>
             <Footer />
           </GradientBackground>
