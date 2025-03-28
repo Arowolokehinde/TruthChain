@@ -14,6 +14,9 @@ const Home: React.FC = () => {
   return (
     <GradientBackground>
       <div className="min-h-screen">
+
+
+        henry was here
         {/* Navigation */}
         <Navbar />
 
