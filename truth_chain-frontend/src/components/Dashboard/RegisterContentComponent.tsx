@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import  { useState, useEffect } from 'react';
 import { Upload, Loader, CheckCircle, AlertCircle, Info, FileText, Shield, Lock } from 'lucide-react';
 
 const RegisterContentComponent = () => {
