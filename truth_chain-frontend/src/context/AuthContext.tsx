@@ -34,7 +34,7 @@ export const AuthContextProvider: React.FC<AuthContextProviderProps> = ({ childr
   const [user, setUser] = useState<User | null>(null);
   const isAuthenticated = user !== null;
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, _password: string) => {
     // Implement your login logic here
     try {
       // Example login implementation:
@@ -58,7 +58,7 @@ export const AuthContextProvider: React.FC<AuthContextProviderProps> = ({ childr
     setUser(null);
   };
 
-  const signup = async (name: string, email: string, password: string) => {
+  const signup = async (name: string, email: string, _password: string) => {
     // Implement your signup logic here
     try {
       // Example signup implementation:

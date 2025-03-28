@@ -1,6 +1,6 @@
 // src/App.tsx
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import GradientBackground from './components/ui/GradientBackground';
 import Dashboard from './pages/Dashboard';
