@@ -12,7 +12,7 @@ const HeroSection: React.FC = () => {
           </h1>
           <p className="text-lg md:text-xl text-blue-200 mb-8">
             Create and Protect your digital content with immutable proof of ownership and authenticity.
-            Built on Stacks blockchain technology.
+            Built on Edu-chain blockchain technology.
           </p>
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
             <Link 
