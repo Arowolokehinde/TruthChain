@@ -22,7 +22,7 @@ const HowItWorksSection: React.FC = () => {
     {
       number: 3,
       title: "Sign & Register",
-      description: "Sign with your Stacks wallet and register on the blockchain."
+      description: "Sign with your  wallet and register on the blockchain."
     },
     {
       number: 4,
