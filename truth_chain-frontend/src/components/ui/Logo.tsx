@@ -38,7 +38,7 @@ const Logo: React.FC<LogoProps> = ({ size = 'large', className = '' }) => {
               Truth-Chain
             </span>
             <span className="text-blue-200 text-xs tracking-wide">
-              Verified on Edu-Chain
+              Verified on Stacks Blockchain
             </span>
           </div>
         </div>
