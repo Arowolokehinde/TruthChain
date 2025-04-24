@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Home from './pages/HomePage';
 import SignUpPage from './pages/Signup';
+import WaitList from './pages/WaitList';
 
 const App: React.FC = () => {
   const location = useLocation();  // Get the current route
@@ -26,6 +27,7 @@ const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/waitlist" element={<WaitList />} />
             </Routes>
             <Footer />
           </GradientBackground>

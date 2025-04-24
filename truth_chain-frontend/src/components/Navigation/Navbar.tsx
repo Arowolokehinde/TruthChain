@@ -22,7 +22,7 @@ const Navbar: React.FC = () => {
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'For Creators', href: '#for-creators' },
     { label: 'For Consumers', href: '#for-consumers' },
-    { label: 'Join Waitlist', href: '#waitlist' }
+    { label: 'Join Waitlist', href: '/waitlist' }
   ];
 
   useEffect(() => {
@@ -67,7 +67,7 @@ const Navbar: React.FC = () => {
   return (
     <nav 
       ref={navRef}
-      className={`fixed w-full z-50 transition-all duration-300 ${
+      className={`fixed  w-full z-50 transition-all duration-300 ${
         isScrolled 
           ? 'bg-gray-900 bg-opacity-90 backdrop-blur-md shadow-lg py-2' 
           : 'bg-transparent py-4'
