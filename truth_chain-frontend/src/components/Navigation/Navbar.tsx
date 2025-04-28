@@ -13,7 +13,7 @@ interface NavItem {
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  // const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
   // Example navigation configuration
@@ -38,7 +38,7 @@ const Navbar: React.FC = () => {
     const handleClickOutside = (event: MouseEvent): void => {
       if (navRef.current && !navRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
-        setActiveDropdown(null);
+        // setActiveDropdown(null);
       }
     };
 
@@ -59,10 +59,10 @@ const Navbar: React.FC = () => {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const toggleDropdown = (label: string): void => {
-    setActiveDropdown(activeDropdown === label ? null : label);
-  };
+  
+  // const toggleDropdown = (label: string): void => {
+  //   setActiveDropdown(activeDropdown === label ? null : label);
+  // };
 
   return (
     <nav 
