@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ChevronRight, Check, Loader, AlertCircle } from 'lucide-react';
-
 
 interface FormData {
   name: string;
@@ -61,28 +58,26 @@ const WaitList: React.FC = () => {
     setFormStatus({ type: null, message: '' });
     
     try {
-      // Add to Firebase
-      const docRef = await addDoc(collection(db, "waitlist"), {
-        ...formData,
-        createdAt: serverTimestamp()
-      });
+      // Submit to Formspree with form data format
+      const formElement = e.target as HTMLFormElement;
+      const formData = new FormData(formElement);
       
-      // Send email notification via backend endpoint
-      const response = await fetch('/api/notify-waitlist', {
+      const response = await fetch('https://formspree.io/f/mpwdzeqq', {
         method: 'POST',
+        body: formData,
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          interest: formData.interest
-        })
+          'Accept': 'application/json'
+        }
       });
       
       if (!response.ok) {
-        throw new Error('Failed to send notification');
+        throw new Error('Failed to submit form');
+      }
+      
+      const data = await response.json();
+      
+      if (!data.ok) {
+        throw new Error('Form submission failed');
       }
       
       setFormStatus({ 
