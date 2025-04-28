@@ -27,7 +27,7 @@ const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUpPage />} />
-              <Route path="/waitlist" element={<WaitList />} />
+              <Route path="/wait-list" element={<WaitList />} />
             </Routes>
             <Footer />
           </GradientBackground>

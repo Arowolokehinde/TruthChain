@@ -22,7 +22,7 @@ const Navbar: React.FC = () => {
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'For Creators', href: '#for-creators' },
     { label: 'For Consumers', href: '#for-consumers' },
-    { label: 'Join Waitlist', href: '/waitlist' }
+    { label: 'Join Waitlist', href: '/wait-list' }
   ];
 
   useEffect(() => {
@@ -96,13 +96,13 @@ const Navbar: React.FC = () => {
         <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
           <Link 
             to="/login" 
-            className="px-3 lg:px-4 py-1.5 lg:py-2 rounded text-blue-200 border border-blue-400 border-opacity-40 hover:bg-blue-900 hover:bg-opacity-30 transition-colors text-sm lg:text-base"
+            className="px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-blue-200 border border-blue-400 border-opacity-40 hover:bg-blue-900 hover:bg-opacity-30 transition-colors text-sm lg:text-base"
           >
             Login
           </Link>
           <Link 
             to="/signup" 
-            className="px-3 lg:px-4 py-1.5 lg:py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 rounded text-white transition-colors text-sm lg:text-base"
+            className="px-3 lg:px-4 py-1.5 lg:py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 rounded-lg text-white transition-colors text-sm lg:text-base"
           >
             Sign Up
           </Link>
