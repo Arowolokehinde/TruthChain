@@ -59,10 +59,10 @@ const Navbar: React.FC = () => {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
-
-  // const toggleDropdown = (label: string): void => {
-  //   setActiveDropdown(activeDropdown === label ? null : label);
-  // };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const toggleDropdown = (label: string): void => {
+    setActiveDropdown(activeDropdown === label ? null : label);
+  };
 
   return (
     <nav 
