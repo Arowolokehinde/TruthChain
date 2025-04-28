@@ -22,7 +22,7 @@ const Navbar: React.FC = () => {
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'For Creators', href: '#for-creators' },
     { label: 'For Consumers', href: '#for-consumers' },
-    { label: 'Join Waitlist', href: '/wait-list' }
+    { label: 'Join Waitlist', href: '/WaitList' }
   ];
 
   useEffect(() => {
