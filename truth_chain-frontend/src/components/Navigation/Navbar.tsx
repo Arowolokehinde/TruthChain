@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from '../ui/Logo';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 // Optional interface for navigation items
 interface NavItem {
@@ -60,9 +60,9 @@ const Navbar: React.FC = () => {
     };
   }, []);
 
-  const toggleDropdown = (label: string): void => {
-    setActiveDropdown(activeDropdown === label ? null : label);
-  };
+  // const toggleDropdown = (label: string): void => {
+  //   setActiveDropdown(activeDropdown === label ? null : label);
+  // };
 
   return (
     <nav 
