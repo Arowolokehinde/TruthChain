@@ -7,13 +7,14 @@ import HowItWorksSection from '@/components/Landing/HowItWorksSection';
 import ForCreatorsSection from '@/components/Landing/ForCreatorsSection';
 import ForConsumersSection from '@/components/Landing/ForConsumersSection';
 import CTASection from '@/components/Landing/CTASection';
-import Footer from '@/components/Footer/Footer';
+// import Footer from '@/components/Footer/Footer';
 import Navbar from '@/components/Navigation/Navbar';
 
 const Home: React.FC = () => {
   return (
     <GradientBackground>
       <div className="min-h-screen">
+
         {/* Navigation */}
         <Navbar />
 

@@ -5,7 +5,7 @@ const CTASection: React.FC = () => {
   return (
     <section className="py-20 bg-gradient-to-r from-blue-900 to-teal-900 bg-opacity-30">
       <div className="container mx-auto px-6 text-center">
-        <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Protect Your Content?</h2>
+        <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Create and Protect Your Content?</h2>
         <p className="text-xl mb-8 max-w-2xl mx-auto text-blue-100">
           Join the growing community of creators using blockchain technology to secure their digital assets.
         </p>

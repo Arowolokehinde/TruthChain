@@ -8,10 +8,10 @@ const HeroSection: React.FC = () => {
       <div className="flex flex-col md:flex-row items-center">
         <div className="md:w-1/2 mb-10 md:mb-0">
           <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
-            Decentralized Content Verification on the Blockchain
+            Decentralized Content Creation & Verification on the Blockchain
           </h1>
           <p className="text-lg md:text-xl text-blue-200 mb-8">
-            Protect your digital content with immutable proof of ownership and authenticity.
+            Create and Protect your digital content with immutable proof of ownership and authenticity.
             Built on Stacks blockchain technology.
           </p>
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">

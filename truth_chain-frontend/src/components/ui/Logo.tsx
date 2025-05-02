@@ -35,10 +35,10 @@ const Logo: React.FC<LogoProps> = ({ size = 'large', className = '' }) => {
           {/* Text logo */}
           <div className="ml-2 flex flex-col">
             <span className="text-white font-bold tracking-wider text-2xl leading-tight">
-              TruthChain
+              Truth-Chain
             </span>
             <span className="text-blue-200 text-xs tracking-wide">
-              Verified on Stacks
+              Verified on Stacks Blockchain
             </span>
           </div>
         </div>
