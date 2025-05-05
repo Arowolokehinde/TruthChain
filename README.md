@@ -1,4 +1,4 @@
-# Decentralized Content Provenance System [truth_chain]
+# Truth-Chain - Decentralized Content Provenance System 
 
 A blockchain-based solution for verifying the authenticity and origin of digital content using the Stacks blockchain.
 
@@ -203,11 +203,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-## Contact
-
-For questions, support, or collaboration:
-
-- Email: [arowolokehinde231@gmail.com](mailto:arowolokehinde231@gmail.com)
-- GitHub: [github.com/yourusername](https://github.com/yourusername)
-- Discord: [Join our community](https://discord.gg/yourinvitelink)
