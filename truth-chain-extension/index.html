@@ -1,13 +1,23 @@
-<!doctype html>
+<!-- src/popup.html -->
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite App</title>
+    <title>Content Provenance</title>
+    <link rel="stylesheet" href="./popup/popup.css" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <div id="app">
+      <h1>Content Provenance</h1>
+      <div id="status">
+        <p>Ready to register content provenance on Stacks blockchain.</p>
+      </div>
+      <div class="wallet-status">
+        <p>Wallet: <span id="wallet-address">Not connected</span></p>
+        <button id="connect-wallet">Connect Wallet</button>
+      </div>
+    </div>
+    <script type="module" src="./popup/popup.js"></script>
   </body>
 </html>
