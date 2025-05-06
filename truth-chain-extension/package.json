@@ -6,11 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:esbuild": "esbuild src/background.js src/content.js src/popup/popup.js --bundle --outdir=dist --format=esm",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@samrum/vite-plugin-web-extension": "^5.1.1",
+    "esbuild": "^0.25.3",
     "vite": "^6.3.1",
     "vite-plugin-web-extension": "^4.4.3"
+  },
+  "dependencies": {
+    "@stacks/blockchain-api-client": "^8.10.0",
+    "@stacks/common": "^7.0.2",
+    "@stacks/connect": "^8.1.9",
+    "@stacks/network": "^7.0.2",
+    "@stacks/transactions": "^7.0.6"
   }
 }
