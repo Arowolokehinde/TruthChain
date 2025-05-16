@@ -148,43 +148,6 @@
   (map-get? author-content-by-index { author: author, index: index })
 )
 
-;; Get author content with pagination - fixed non-recursive approach
-;; @param author: Stacks address of content creator
-;; @param page: Page number (0-based)
-;; @param page-size: Number of items per page (max 20)
-;; @returns: List of content hashes for the requested page
-(define-read-only (get-author-content-paged 
-                    (author principal) 
-                    (page uint) 
-                    (page-size uint))
-  (let
-    (
-      ;; Limit page size to reasonable amount to avoid stack overflows
-      (limited-page-size (if (> page-size u20) u20 page-size))
-      (author-record (default-to { content-count: u0, last-activity: u0 } 
-                       (map-get? author-content { author: author })))
-      (content-count (get content-count author-record))
-      (start-index (* page limited-page-size))
-    )
-    
-    ;; Check if requested page is valid
-    (if (>= start-index content-count)
-      (ok (list))
-      (let
-        (
-          (items-remaining (- content-count start-index))
-          (items-to-fetch (if (< items-remaining limited-page-size) 
-                             items-remaining 
-                             limited-page-size))
-        )
-        ;; Build a fixed-size list of content hashes using individual lookups
-        ;; This avoids recursion issues in Clarity
-        (ok (get-content-hash-page author start-index items-to-fetch))
-      )
-    )
-  )
-)
-
 ;; Helper to get a page of content hashes without recursion
 ;; Limited to maximum 20 items to avoid stack issues
 (define-read-only (get-content-hash-page (author principal) (start-index uint) (count uint))
