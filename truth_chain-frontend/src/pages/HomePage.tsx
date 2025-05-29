@@ -1,45 +1,36 @@
 import React from 'react';
 
-import GradientBackground from '@/components/ui/GradientBackground';
 import HeroSection from '@/components/Landing/HeroSection';
 import FeaturesSection from '@/components/Landing/FeaturesSection';
 import HowItWorksSection from '@/components/Landing/HowItWorksSection';
 import ForCreatorsSection from '@/components/Landing/ForCreatorsSection';
 import ForConsumersSection from '@/components/Landing/ForConsumersSection';
 import CTASection from '@/components/Landing/CTASection';
-// import Footer from '@/components/Footer/Footer';
-import Navbar from '@/components/Navigation/Navbar';
 
 const Home: React.FC = () => {
   return (
-    <GradientBackground>
-      <div className="min-h-screen">
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <HeroSection />
 
-        {/* Navigation */}
-        <Navbar />
+      {/* Features Section */}
+      <FeaturesSection />
 
-        {/* Hero Section */}
-        <HeroSection />
+      {/* How It Works Section */}
+      <HowItWorksSection />
 
-        {/* Features Section */}
-        <FeaturesSection />
+      {/* For Creators Section */}
+      <ForCreatorsSection />
 
-        {/* How It Works Section */}
-        <HowItWorksSection />
+      {/* For Consumers Section */}
+      <ForConsumersSection />
 
-        {/* For Creators Section */}
-        <ForCreatorsSection />
+      {/* CTA Section */}
+      <CTASection />
 
-        {/* For Consumers Section */}
-        <ForConsumersSection />
-
-        {/* CTA Section */}
-        <CTASection />
-
-        {/* Footer */}
-        {/* <Footer /> */}
-      </div>
-    </GradientBackground>
+      {/* Footer */}
+      {/* <Footer /> */}
+    </div>
   );
 };
 

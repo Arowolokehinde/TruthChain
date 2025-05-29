@@ -1,45 +1,38 @@
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-import React, { createContext, useContext, useState } from 'react';
-
-interface AppContextType
-{
- 
-  walletConnected: boolean;
-  setWalletConnected: (value: boolean) => void;
-  walletAddress: string | null;
-  setWalletAddress: (value: string | null) => void;
-  
+interface AppContextValue {
+  isLoading: boolean;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-{
-  
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  
-
-  return (
-    <AppContext.Provider value={{
-      
-      walletConnected,
-      setWalletConnected,
-      walletAddress,
-      setWalletAddress, 
-     
-    }}>
-      {children}
-    </AppContext.Provider>
-  );
-};
-
-export const useAppContext = () =>
-{
+export const useAppContext = () => {
   const context = useContext(AppContext);
-  if (context === undefined)
-  {
+  if (context === undefined) {
     throw new Error('useAppContext must be used within an AppProvider');
   }
   return context;
+};
+
+// Also export as useApp for backward compatibility
+export const useApp = useAppContext;
+
+interface AppProviderProps {
+  children: ReactNode;
+}
+
+export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const value: AppContextValue = {
+    isLoading,
+    setIsLoading,
+  };
+
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
 };
