@@ -120,3 +120,35 @@
     })
   )
 )
+
+;; Verify content by hash (read-only)
+(define-read-only (verify-content (hash (buff 32)))
+  (match (map-get? content-registry { hash: hash })
+    registration-data (ok registration-data)
+    ERR-HASH-NOT-FOUND
+  )
+)
+
+;; Check if hash exists (simple boolean check)
+(define-read-only (hash-exists (hash (buff 32)))
+  (is-some (map-get? content-registry { hash: hash }))
+)
+
+;; Get content by author and registration ID
+(define-read-only (get-author-content (author principal) (registration-id uint))
+  (match (map-get? author-content { author: author, registration-id: registration-id })
+    hash-data 
+      (match (map-get? content-registry { hash: (get hash hash-data) })
+        content-data (ok content-data)
+        ERR-HASH-NOT-FOUND
+      )
+    ERR-HASH-NOT-FOUND
+  )
+)
+
+;; Get total number of registrations
+(define-read-only (get-total-registrations)
+  (ok (var-get total-registrations))
+)
+
+
