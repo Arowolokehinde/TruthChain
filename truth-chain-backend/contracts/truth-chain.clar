@@ -10,9 +10,9 @@
 ;; Constant Error codes
 (define-constant ERR-HASH-EXISTS (err u100))
 (define-constant ERR-INVALID-HASH (err u101))
-(define-constant ERR-INVALID-CONTENT-TYPE (err 102))
-(define-constant ERR-UNAUTHORIZED (err 103))
-(define-constant ERR-HASH-NOT-FOUND (err 104))
+(define-constant ERR-INVALID-CONTENT-TYPE (err u102))
+(define-constant ERR-UNAUTHORIZED (err u103))
+(define-constant ERR-HASH-NOT-FOUND (err u104))
 
 
 ;; Content types
@@ -95,7 +95,7 @@
       {
         author: tx-sender,
         block-height: current-block,
-        timestamp: current-time,
+        time-stamp: current-time,
         content-type: content-type,
         registration-id: new-registration-id
       }
