@@ -1,0 +1,105 @@
+{
+  "manifest_version": 3,
+  "name": "TruthChain - Content Verification",
+  "version": "1.0.0",
+  "description": "Verify and register content authenticity on the Stacks blockchain. Protect your digital content with immutable proof of ownership.",
+  "author": "TruthChain Team",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "notifications"
+  ],
+  
+  "host_permissions": [
+    "https://*.medium.com/*",
+    "https://*.substack.com/*",
+    "https://*.dev.to/*",
+    "https://*.hashnode.com/*",
+    "https://*.mirror.xyz/*",
+    "https://*.quora.com/*",
+    "https://*.linkedin.com/*",
+    "https://*.twitter.com/*",
+    "https://*.x.com/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.medium.com/*",
+        "https://*.substack.com/*",
+        "https://*.dev.to/*",
+        "https://*.hashnode.com/*",
+        "https://*.mirror.xyz/*",
+        "https://*.quora.com/*",
+        "https://*.linkedin.com/*",
+        "https://*.twitter.com/*",
+        "https://*.x.com/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "TruthChain - Verify Content",
+    "default_icon": {
+      "16": "Truthchain.jpeg",
+      "32": "Truthchain.jpeg",
+      "48": "Truthchain.jpeg",
+      "128": "Truthchain.jpeg"
+    }
+  },
+  
+  "icons": {
+    "16": "Truthchain.jpeg",
+    "32": "Truthchain.jpeg",
+    "48": "Truthchain.jpeg",
+    "128": "Truthchain.jpeg"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/*",
+        "Truthchain.jpeg"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  
+  "externally_connectable": {
+    "matches": [
+      "https://explorer.stacks.co/*",
+      "https://explorer.hiro.so/*"
+    ]
+  },
+  
+  "commands": {
+    "verify-content": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+V",
+        "mac": "Command+Shift+V"
+      },
+      "description": "Verify current page content"
+    },
+    "register-content": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Register current content on blockchain"
+    }
+  },
+  
+  "homepage_url": "https://truth-chain.vercel.app/",
+  
+  "minimum_chrome_version": "88"
+}
