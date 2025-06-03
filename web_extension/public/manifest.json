@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "TruthChain - Content Verification",
+  "name": "Blog2Block - Web2 to Web3 Bridge",
   "version": "1.0.0",
-  "description": "Verify and register content authenticity on the Stacks blockchain. Protect your digital content with immutable proof of ownership.",
+  "description": "Bridge your web2 content to web3 using Stacks blockchain and decentralized storage.",
   "author": "TruthChain Team",
   
   "permissions": [
@@ -18,10 +18,7 @@
     "https://*.dev.to/*",
     "https://*.hashnode.com/*",
     "https://*.mirror.xyz/*",
-    "https://*.quora.com/*",
-    "https://*.linkedin.com/*",
-    "https://*.twitter.com/*",
-    "https://*.x.com/*"
+    "https://*.linkedin.com/*"
   ],
   
   "background": {
@@ -37,10 +34,7 @@
         "https://*.dev.to/*",
         "https://*.hashnode.com/*",
         "https://*.mirror.xyz/*",
-        "https://*.quora.com/*",
-        "https://*.linkedin.com/*",
-        "https://*.twitter.com/*",
-        "https://*.x.com/*"
+        "https://*.linkedin.com/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle"
@@ -49,7 +43,7 @@
   
   "action": {
     "default_popup": "index.html",
-    "default_title": "TruthChain - Verify Content",
+    "default_title": "TruthChain",
     "default_icon": {
       "16": "Truthchain.jpeg",
       "32": "Truthchain.jpeg",
@@ -65,6 +59,10 @@
     "128": "Truthchain.jpeg"
   },
   
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+  },
+  
   "web_accessible_resources": [
     {
       "resources": [
@@ -78,24 +76,26 @@
   "externally_connectable": {
     "matches": [
       "https://explorer.stacks.co/*",
-      "https://explorer.hiro.so/*"
+      "https://explorer.hiro.so/*",
+      "https://*.web3.storage/*",
+      "https://*.ipfs.io/*"
     ]
   },
   
   "commands": {
+    "bridge-content": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "Bridge current content to Web3"
+    },
     "verify-content": {
       "suggested_key": {
         "default": "Ctrl+Shift+V",
         "mac": "Command+Shift+V"
       },
-      "description": "Verify current page content"
-    },
-    "register-content": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+R",
-        "mac": "Command+Shift+R"
-      },
-      "description": "Register current content on blockchain"
+      "description": "Verify content on blockchain"
     }
   },
   
