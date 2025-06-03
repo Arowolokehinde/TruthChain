@@ -27,32 +27,40 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('TruthChain extension installed');
 });
 
-// Handle messages from content scripts and popup
+// Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Background received message:', request);
   
-  if (request.action === 'registerContent') {
-    handleContentRegistration(request.content)
-      .then(result => {
-        sendResponse({ success: true, data: result });
-      })
-      .catch(error => {
-        sendResponse({ success: false, error: error.message });
-      });
-    
-    return true; // Will respond asynchronously
-  }
-  
-  if (request.action === 'verifyContent') {
-    handleContentVerification(request.content)
-      .then(result => {
-        sendResponse({ success: true, data: result });
-      })
-      .catch(error => {
-        sendResponse({ success: false, error: error.message });
-      });
-    
-    return true; // Will respond asynchronously
+  switch (request.action) {
+    case 'connectWallet':
+      handleWalletConnection()
+        .then(result => sendResponse({ success: true, address: result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'registerCurrentPage':
+      handleCurrentPageRegistration()
+        .then(result => sendResponse({ success: true, data: result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'verifyCurrentPage':
+      handleCurrentPageVerification()
+        .then(result => sendResponse({ success: true, data: result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'registerContent':
+      handleContentRegistration(request.content)
+        .then(result => sendResponse({ success: true, data: result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'verifyContent':
+      handleContentVerification(request.content)
+        .then(result => sendResponse({ success: true, data: result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
   }
 });
 
@@ -70,19 +78,83 @@ chrome.commands.onCommand.addListener((command: string) => {
   }
 });
 
+async function handleWalletConnection(): Promise<string> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id! },
+      function: connectXverseWallet
+    });
+
+    const address = results[0].result;
+    if (address) {
+      await chrome.storage.local.set({ walletAddress: address });
+      return address;
+    } else {
+      throw new Error('Failed to connect wallet');
+    }
+  } catch (error) {
+    console.error('Wallet connection error:', error);
+    throw error;
+  }
+}
+
+async function handleCurrentPageRegistration() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id! },
+    function: extractAndRegisterContent
+  });
+
+  return results[0].result;
+}
+
+async function handleCurrentPageVerification() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id! },
+    function: extractAndVerifyContent
+  });
+
+  return results[0].result;
+}
+
 async function handleContentRegistration(contentData: ContentData): Promise<RegistrationResult> {
   try {
     const contentHash = await generateContentHash(contentData);
     
-    // TODO: Integrate with Stacks blockchain
+    // Get connected wallet
+    const storage = await chrome.storage.local.get('walletAddress');
+    if (!storage.walletAddress) {
+      throw new Error('No wallet connected');
+    }
+
+    // TODO: Replace with actual Stacks blockchain call
+    // For now, simulate blockchain registration
     const registrationResult: RegistrationResult = {
       hash: contentHash,
       timestamp: new Date().toISOString(),
-      txId: 'simulated-tx-' + Date.now()
+      txId: 'stx-tx-' + Date.now() // This should be actual transaction ID
     };
     
+    // Store registration locally for verification
     await chrome.storage.local.set({
-      [`registration_${contentHash}`]: registrationResult
+      [`registration_${contentHash}`]: {
+        ...registrationResult,
+        walletAddress: storage.walletAddress,
+        contentData: contentData
+      }
+    });
+    
+    // Send notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'Truthchain.jpeg',
+      title: 'Content Registered',
+      message: `Content "${contentData.title}" has been registered on blockchain`
     });
     
     return registrationResult;
@@ -95,8 +167,12 @@ async function handleContentRegistration(contentData: ContentData): Promise<Regi
 async function handleContentVerification(contentData: ContentData): Promise<VerificationResult> {
   try {
     const contentHash = await generateContentHash(contentData);
+    
+    // Check local storage first
     const stored = await chrome.storage.local.get(`registration_${contentHash}`);
     const registration = stored[`registration_${contentHash}`];
+    
+    // TODO: Also check blockchain for verification
     
     return {
       hash: contentHash,
@@ -123,6 +199,82 @@ async function generateContentHash(contentData: ContentData): Promise<string> {
   
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Functions to be injected into web pages
+function connectXverseWallet() {
+  return new Promise((resolve, reject) => {
+    // Check if Stacks Connect is already available
+    // @ts-ignore
+    if (window.StacksConnect) {
+      initiateConnection();
+    } else {
+      // Load Stacks Connect dynamically
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@stacks/connect@20.1.0/dist/index.umd.js';
+      script.onload = initiateConnection;
+      script.onerror = () => reject(new Error('Failed to load Stacks Connect'));
+      document.head.appendChild(script);
+    }
+
+    function initiateConnection() {
+      try {
+        // @ts-ignore
+        const { showConnect } = window.StacksConnect;
+        
+        showConnect({
+          appDetails: {
+            name: 'TruthChain Extension',
+            icon: 'https://truth-chain.vercel.app/favicon.ico'
+          },
+          onFinish: (data: any) => {
+            const address = data.userSession.loadUserData().profile.stxAddress.testnet;
+            resolve(address);
+          },
+          onCancel: () => {
+            reject(new Error('User cancelled wallet connection'));
+          },
+          userSession: false
+        });
+      } catch (error) {
+        reject(error);
+      }
+    }
+  });
+}
+
+function extractAndRegisterContent() {
+  const content = {
+    title: document.title,
+    content: document.body.innerText.slice(0, 2000),
+    url: window.location.href,
+    hostname: window.location.hostname,
+    timestamp: new Date().toISOString()
+  };
+
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({
+      action: 'registerContent',
+      content: content
+    }, resolve);
+  });
+}
+
+function extractAndVerifyContent() {
+  const content = {
+    title: document.title,
+    content: document.body.innerText.slice(0, 2000),
+    url: window.location.href,
+    hostname: window.location.hostname,
+    timestamp: new Date().toISOString()
+  };
+
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({
+      action: 'verifyContent',
+      content: content
+    }, resolve);
+  });
 }
 
 async function executeContentVerification(): Promise<void> {
