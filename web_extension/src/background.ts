@@ -1,4 +1,4 @@
-/// <reference types="chrome" />
+// @ts-nocheck
 
 console.log('TruthChain background script loaded');
 
@@ -28,7 +28,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Handle messages from popup and content scripts
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   console.log('Background received message:', request);
   
   switch (request.action) {

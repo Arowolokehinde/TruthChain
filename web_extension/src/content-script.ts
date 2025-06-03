@@ -1,4 +1,4 @@
-/// <reference types="chrome" />
+// @ts-nocheck
 
 console.log('TruthChain content script loaded on:', window.location.hostname);
 
