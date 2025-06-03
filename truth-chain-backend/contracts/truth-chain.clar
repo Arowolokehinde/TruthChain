@@ -10,9 +10,9 @@
 ;; Constant Error codes
 (define-constant ERR-HASH-EXISTS (err u100))
 (define-constant ERR-INVALID-HASH (err u101))
-(define-constant ERR-INVALID-CONTENT-TYPE (err 102))
-(define-constant ERR-UNAUTHORIZED (err 103))
-(define-constant ERR-HASH-NOT-FOUND (err 104))
+(define-constant ERR-INVALID-CONTENT-TYPE (err u102))
+(define-constant ERR-UNAUTHORIZED (err u103))
+(define-constant ERR-HASH-NOT-FOUND (err u104))
 
 
 ;; Content types
@@ -95,7 +95,7 @@
       {
         author: tx-sender,
         block-height: current-block,
-        timestamp: current-time,
+        time-stamp: current-time,
         content-type: content-type,
         registration-id: new-registration-id
       }
@@ -119,4 +119,84 @@
       timestamp: current-time
     })
   )
+)
+
+;; Verify content by hash (read-only)
+(define-read-only (verify-content (hash (buff 32)))
+  (match (map-get? content-registry { hash: hash })
+    registration-data (ok registration-data)
+    ERR-HASH-NOT-FOUND
+  )
+)
+
+;; Check if hash exists (simple boolean check)
+(define-read-only (hash-exists (hash (buff 32)))
+  (is-some (map-get? content-registry { hash: hash }))
+)
+
+;; Get content by author and registration ID
+(define-read-only (get-author-content (author principal) (registration-id uint))
+  (match (map-get? author-content { author: author, registration-id: registration-id })
+    hash-data 
+      (match (map-get? content-registry { hash: (get hash hash-data) })
+        content-data (ok content-data)
+        ERR-HASH-NOT-FOUND
+      )
+    ERR-HASH-NOT-FOUND
+  )
+)
+
+;; Get total number of registrations
+(define-read-only (get-total-registrations)
+  (ok (var-get total-registrations))
+)
+
+;; Get contract stats
+(define-read-only (get-contract-stats)
+  (ok {
+    total-registrations: (var-get total-registrations),
+    contract-active: (var-get contract-active),
+    contract-owner: CONTRACT-OWNER
+  })
+)
+
+;; Batch verify multiple hashes (up to 10 at once)
+(define-read-only (batch-verify (hashes (list 10 (buff 32))))
+  (ok (map verify-content-simple hashes))
+)
+
+;; Helper for batch verify
+(define-private (verify-content-simple (hash (buff 32)))
+  {
+    hash: hash,
+    exists: (hash-exists hash)
+  }
+)
+
+;; Admin functions (only contract owner)
+;; Toggle contract active status
+(define-public (toggle-contract-status)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-UNAUTHORIZED)
+    (var-set contract-active (not (var-get contract-active)))
+    (ok (var-get contract-active))
+  )
+)
+
+;; Emergency function to verify specific registration by ID
+(define-read-only (get-registration-by-id (registration-id uint))
+  (if (and (> registration-id u0) (<= registration-id (var-get total-registrations)))
+    (ok registration-id)
+    ERR-HASH-NOT-FOUND
+  )
+)
+
+;; Get content type constants (for frontend reference)
+(define-read-only (get-content-types)
+  (ok {
+    blog-post: CONTENT-TYPE-BLOG-POST,
+    page: CONTENT-TYPE-PAGE,
+    media: CONTENT-TYPE-MEDIA,
+    document: CONTENT-TYPE-DOCUMENT
+  })
 )
