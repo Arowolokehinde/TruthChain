@@ -79,6 +79,32 @@ async function handleXverseConnection(): Promise<WalletData> {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
+    // First, inject a detection script to check for wallets
+    const detectionResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id! },
+      function: detectWalletProviders
+    });
+
+    const availableProviders = detectionResults[0].result;
+    console.log('Available wallet providers:', availableProviders);
+
+    if (availableProviders.length === 0) {
+      // Try alternative detection method or use Stacks Connect
+      const connectResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id! },
+        function: tryStacksConnect
+      });
+      
+      const walletData = connectResults[0].result;
+      if (walletData) {
+        await chrome.storage.local.set({ walletData });
+        return walletData;
+      } else {
+        throw new Error('No Stacks wallet found. Please install Xverse, Leather, or another Stacks wallet.');
+      }
+    }
+
+    // If providers are available, try to connect
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id! },
       function: connectXverseWallet
@@ -86,14 +112,13 @@ async function handleXverseConnection(): Promise<WalletData> {
 
     const walletData = results[0].result;
     if (walletData) {
-      // Store wallet data
       await chrome.storage.local.set({ walletData });
       return walletData;
     } else {
-      throw new Error('Failed to connect Xverse wallet');
+      throw new Error('Failed to connect to wallet');
     }
   } catch (error) {
-    console.error('Xverse connection error:', error);
+    console.error('Wallet connection error:', error);
     throw error;
   }
 }
@@ -246,209 +271,192 @@ async function handleGetUserContent(address: string): Promise<any[]> {
 }
 
 // Functions to be injected into web pages
-function connectXverseWallet() {
-  return new Promise(async (resolve, reject) => {
-    // First check if we're in the right context
-    if (typeof window === 'undefined') {
-      reject(new Error('Window object not available'));
-      return;
-    }
+function detectWalletProviders() {
+  const providers = [];
+  
+  console.log('Checking for wallet providers in page context...');
+  console.log('Window object keys:', Object.keys(window));
+  
+  // Check for Xverse
+  if (window.XverseProviders?.StacksProvider) {
+    console.log('✓ Found Xverse wallet');
+    providers.push('xverse');
+  }
+  
+  // Check for Leather
+  if (window.LeatherProvider || window.HiroWalletProvider) {
+    console.log('✓ Found Leather/Hiro wallet');
+    providers.push('leather');
+  }
+  
+  // Check for generic providers
+  if (window.StacksProvider) {
+    console.log('✓ Found generic Stacks provider');
+    providers.push('stacks');
+  }
+  
+  // Check for alternative names
+  if (window.stacks || window.stacksProvider) {
+    console.log('✓ Found alternative Stacks provider');
+    providers.push('alternative');
+  }
+  
+  console.log('Detected providers:', providers);
+  return providers;
+}
 
-    console.log('Checking for Stacks wallet providers...');
+function tryStacksConnect() {
+  return new Promise((resolve, reject) => {
+    console.log('Trying Stacks Connect as fallback...');
     
-    // Wait for wallet providers to load (they might inject asynchronously)
-    const waitForProviders = async (maxWait = 5000) => {
-      const start = Date.now();
+    // Create a script element to load Stacks Connect
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/@stacks/connect@20.1.0/dist/index.umd.js';
+    script.onload = () => {
+      console.log('Stacks Connect loaded');
       
-      while (Date.now() - start < maxWait) {
-        // Check for Xverse (most common)
-        if (window.XverseProviders?.StacksProvider) {
-          console.log('Found Xverse wallet provider');
-          return { type: 'xverse', provider: window.XverseProviders.StacksProvider };
+      setTimeout(() => {
+        if (window.StacksConnect?.showConnect) {
+          console.log('Stacks Connect available, showing connect dialog');
+          
+          window.StacksConnect.showConnect({
+            appDetails: {
+              name: 'TruthChain Extension',
+              icon: window.location.origin + '/Truthchain.jpeg'
+            },
+            onFinish: (authData) => {
+              try {
+                console.log('Stacks Connect auth successful:', authData);
+                const userData = authData.userSession.loadUserData();
+                const address = userData.profile.stxAddress?.testnet 
+                  || userData.profile.stxAddress?.mainnet
+                  || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+                
+                resolve({
+                  address: address,
+                  publicKey: userData.appPrivateKey || 'stacks-connect-key',
+                  provider: 'stacks-connect',
+                  isConnected: true
+                });
+              } catch (error) {
+                console.error('Error processing Stacks Connect data:', error);
+                resolve(null);
+              }
+            },
+            onCancel: () => {
+              console.log('Stacks Connect cancelled');
+              resolve(null);
+            }
+          });
+        } else {
+          console.log('Stacks Connect not available after loading');
+          resolve(null);
         }
-        
-        // Check for Leather/Hiro wallet
-        if (window.LeatherProvider || window.HiroWalletProvider) {
-          const provider = window.LeatherProvider || window.HiroWalletProvider;
-          console.log('Found Leather/Hiro wallet provider');
-          return { type: 'leather', provider };
-        }
-        
-        // Check for generic StacksProvider
-        if (window.StacksProvider) {
-          console.log('Found generic Stacks provider');
-          return { type: 'generic', provider: window.StacksProvider };
-        }
-        
-        // Check if any wallet is injecting providers
-        if (window.stacks || window.stacksProvider) {
-          const provider = window.stacks || window.stacksProvider;
-          console.log('Found alternative Stacks provider');
-          return { type: 'alternative', provider };
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
-      return null;
+      }, 500);
     };
     
-    try {
-      const walletInfo = await waitForProviders();
-      
-      if (!walletInfo) {
-        console.log('No wallet providers found after waiting');
-        tryMockConnection('No Stacks wallet detected. Install Xverse, Leather, or another Stacks wallet.');
-        return;
-      }
-      
-      console.log(`Attempting to connect to ${walletInfo.type} wallet...`);
-      
-      // Try to connect based on wallet type
-      if (walletInfo.type === 'xverse') {
-        await connectXverse(walletInfo.provider);
-      } else if (walletInfo.type === 'leather') {
-        await connectLeather(walletInfo.provider);
-      } else {
-        await connectGeneric(walletInfo.provider, walletInfo.type);
-      }
-      
-    } catch (error) {
-      console.error('Wallet connection error:', error);
-      tryMockConnection('Wallet connection failed: ' + error.message);
-    }
+    script.onerror = () => {
+      console.log('Failed to load Stacks Connect');
+      resolve(null);
+    };
+    
+    document.head.appendChild(script);
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      console.log('Stacks Connect timeout');
+      resolve(null);
+    }, 10000);
+  });
+}
 
-    async function connectXverse(provider) {
+function connectXverseWallet() {
+  return new Promise(async (resolve, reject) => {
+    console.log('Starting wallet connection process...');
+    
+    // Wait a bit for providers to fully initialize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check for Xverse first (most reliable)
+    if (window.XverseProviders?.StacksProvider) {
       try {
-        console.log('Connecting to Xverse wallet...');
+        console.log('Connecting to Xverse...');
+        const provider = window.XverseProviders.StacksProvider;
         
-        // Request account access
         const result = await provider.request('stx_requestAccounts');
-        console.log('Xverse stx_requestAccounts result:', result);
+        console.log('Xverse request result:', result);
         
         if (!result || result.length === 0) {
-          throw new Error('No accounts available in Xverse wallet');
+          throw new Error('No accounts available');
         }
         
-        // Get address information
         const addressInfo = await provider.request('stx_getAddresses');
         console.log('Xverse address info:', addressInfo);
         
-        if (!addressInfo || !addressInfo.addresses || addressInfo.addresses.length === 0) {
-          throw new Error('Could not get address from Xverse wallet');
+        if (!addressInfo?.addresses?.length) {
+          throw new Error('Could not get address information');
         }
         
         const address = addressInfo.addresses[0];
-        
         resolve({
           address: address.address,
           publicKey: address.publicKey || 'xverse-public-key',
           provider: 'xverse',
           isConnected: true
         });
+        return;
         
       } catch (error) {
         console.error('Xverse connection failed:', error);
-        if (error.message.includes('User rejected')) {
-          throw new Error('Connection cancelled by user');
-        }
-        throw new Error('Failed to connect to Xverse wallet: ' + error.message);
       }
     }
-
-    async function connectLeather(provider) {
+    
+    // Try Leather if Xverse not available
+    if (window.LeatherProvider) {
       try {
-        console.log('Connecting to Leather wallet...');
+        console.log('Trying Leather wallet...');
+        const result = await window.LeatherProvider.request('stx_requestAccounts');
         
-        const result = await provider.request('stx_requestAccounts');
-        console.log('Leather connection result:', result);
-        
-        if (!result) {
-          throw new Error('No response from Leather wallet');
+        if (result?.addresses?.length) {
+          resolve({
+            address: result.addresses[0],
+            publicKey: result.publicKey || 'leather-key',
+            provider: 'leather',
+            isConnected: true
+          });
+          return;
         }
-        
-        let address, publicKey;
-        
-        if (result.addresses && result.addresses.length > 0) {
-          address = result.addresses[0];
-          publicKey = result.publicKey || 'leather-public-key';
-        } else if (typeof result === 'string') {
-          address = result;
-          publicKey = 'leather-public-key';
-        } else {
-          throw new Error('Invalid response format from Leather wallet');
-        }
-        
-        resolve({
-          address: address,
-          publicKey: publicKey,
-          provider: 'leather',
-          isConnected: true
-        });
-        
       } catch (error) {
         console.error('Leather connection failed:', error);
-        throw new Error('Failed to connect to Leather wallet: ' + error.message);
       }
     }
-
-    async function connectGeneric(provider, providerType) {
-      try {
-        console.log(`Connecting to ${providerType} wallet...`);
-        
-        const accounts = await provider.request('stx_requestAccounts');
-        console.log(`${providerType} accounts:`, accounts);
-        
-        if (!accounts || accounts.length === 0) {
-          throw new Error(`No accounts found in ${providerType} wallet`);
-        }
-        
-        resolve({
-          address: Array.isArray(accounts) ? accounts[0] : accounts,
-          publicKey: 'generic-public-key',
-          provider: providerType,
-          isConnected: true
-        });
-        
-      } catch (error) {
-        console.error(`${providerType} connection failed:`, error);
-        throw new Error(`Failed to connect to ${providerType} wallet: ` + error.message);
-      }
+    
+    // Show user-friendly message and offer demo mode
+    const useDemo = confirm(
+      '🔗 Wallet Connection Issue\n\n' +
+      'TruthChain couldn\'t connect to your Stacks wallet.\n\n' +
+      'This might happen if:\n' +
+      '• Your wallet is locked\n' +
+      '• You need to refresh the page\n' +
+      '• The wallet extension needs updating\n\n' +
+      'Try:\n' +
+      '1. Unlock your Xverse/Leather wallet\n' +
+      '2. Refresh this page\n' +
+      '3. Try connecting again\n\n' +
+      'Would you like to use Demo Mode instead?\n' +
+      '(All features work but transactions are simulated)'
+    );
+    
+    if (useDemo) {
+      resolve({
+        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+        publicKey: 'demo-public-key',
+        isDemoMode: true,
+        provider: 'demo'
+      });
+    } else {
+      reject(new Error('Wallet connection cancelled. Please ensure your Stacks wallet is unlocked and try again.'));
     }
-
-    function tryMockConnection(reason) {
-      console.warn('Wallet connection failed. Reason:', reason);
-      
-      const useDemo = confirm(
-        '🔗 Stacks Wallet Required\n\n' +
-        'TruthChain needs a Stacks wallet to function.\n\n' +
-        'Recommended wallets:\n' +
-        '🥇 Xverse - Most popular Stacks wallet\n' +
-        '🥈 Leather - Official Hiro wallet\n' +
-        '🥉 Asigna - Enterprise wallet\n\n' +
-        'Install from Chrome Web Store or:\n' +
-        '• Xverse: xverse.app\n' +
-        '• Leather: leather.io\n\n' +
-        'Would you like to try Demo Mode instead?\n' +
-        '(Demo mode simulates all features for testing)'
-      );
-      
-      if (useDemo) {
-        resolve({
-          address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-          publicKey: 'demo-public-key',
-          isDemoMode: true,
-          provider: 'demo'
-        });
-      } else {
-        reject(new Error('Please install a Stacks wallet and try again.\n\nRecommended: Xverse wallet from Chrome Web Store'));
-      }
-    }
-
-    // Timeout after 15 seconds
-    setTimeout(() => {
-      reject(new Error('Connection timeout. Please ensure your Stacks wallet is installed and unlocked.'));
-    }, 15000);
   });
 }
 

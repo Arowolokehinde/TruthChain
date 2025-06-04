@@ -19,7 +19,8 @@
     "https://*.dev.to/*",
     "https://*.hashnode.com/*",
     "https://*.mirror.xyz/*",
-    "https://*.linkedin.com/*"
+    "https://*.linkedin.com/*",
+    "<all_urls>"
   ],
   
   "background": {
