@@ -38,7 +38,8 @@
         "https://*.linkedin.com/*"
       ],
       "js": ["content-script.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   
@@ -61,7 +62,7 @@
   },
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self' https://unpkg.com; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   
   "web_accessible_resources": [
@@ -81,8 +82,7 @@
       "https://explorer.stacks.co/*",
       "https://explorer.hiro.so/*",
       "https://*.web3.storage/*",
-      "https://*.ipfs.io/*",
-      "https://unpkg.com/*"
+      "https://*.ipfs.io/*"
     ]
   },
   
