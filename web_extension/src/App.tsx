@@ -4,6 +4,7 @@ interface WalletState {
   isConnected: boolean;
   address: string | null;
   publicKey: string | null;
+  isDemoMode?: boolean;
 }
 
 interface ContentState {
@@ -44,25 +45,43 @@ const App = () => {
   const connectXverseWallet = async () => {
     setIsLoading(true);
     try {
+      console.log('Attempting to connect Stacks wallet...');
+      
       // @ts-ignore
       chrome.runtime.sendMessage(
         { action: 'connectXverse' },
         (response: { success: boolean; walletData?: any; error?: string }) => {
-          if (response.success && response.walletData) {
+          console.log('Wallet connection response:', response);
+          
+          if (response && response.success && response.walletData) {
             setWallet({
               isConnected: true,
               address: response.walletData.address,
-              publicKey: response.walletData.publicKey
+              publicKey: response.walletData.publicKey,
+              isDemoMode: response.walletData.isDemoMode
             });
+            
+            const providerText = response.walletData.provider || 'unknown';
+            const modeText = response.walletData.isDemoMode ? ' (Demo Mode)' : ` via ${providerText}`;
+            alert(`🎉 Wallet Connected${modeText}!\n\n📍 Address: ${response.walletData.address.slice(0, 10)}...${response.walletData.address.slice(-6)}\n\n${response.walletData.isDemoMode ? '🎮 Demo mode - all features work but transactions are simulated' : '✅ Ready for real blockchain transactions'}`);
           } else {
-            console.error('Wallet connection failed:', response.error);
-            alert('Failed to connect Xverse wallet. Please ensure Xverse extension is installed.');
+            console.error('Wallet connection failed:', response?.error);
+            
+            const errorMsg = response?.error || 'Unknown error';
+            if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
+              alert('🔗 Stacks Wallet Required\n\nTo use TruthChain, install one of these wallets:\n\n🥇 Xverse (Recommended)\n🥈 Leather (by Hiro)\n🥉 Asigna\n\nAfter installation:\n1. Create/import wallet\n2. Unlock it\n3. Try connecting again\n\nOr use Demo Mode to test features!');
+            } else if (errorMsg.includes('timeout')) {
+              alert('⏰ Connection Timeout\n\nPlease:\n1. Ensure your wallet is unlocked\n2. Check internet connection\n3. Try again\n\nIf issues persist, try refreshing the page.');
+            } else {
+              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTip: Make sure your Stacks wallet is unlocked and try again.`);
+            }
           }
           setIsLoading(false);
         }
       );
     } catch (error) {
       console.error('Error connecting wallet:', error);
+      alert('⚠️ Extension Error\n\nPlease refresh the extension and try again.\n\nIf the problem persists, try reloading the page.');
       setIsLoading(false);
     }
   };
@@ -147,7 +166,7 @@ const App = () => {
                 </div>
                 <div>
                   <h1 className='text-lg font-bold text-white tracking-tight'>TruthChain</h1>
-                  <p className='text-xs text-gray-300 font-medium'>Enterprise Web3 Bridge</p>
+                  <p className='text-xs text-gray-300 font-medium'>Content provenance on the blockchain</p>
                 </div>
               </div>
               <div className='text-right'>

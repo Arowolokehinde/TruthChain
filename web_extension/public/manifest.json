@@ -9,7 +9,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "notifications"
+    "notifications",
+    "tabs"
   ],
   
   "host_permissions": [
@@ -60,14 +61,16 @@
   },
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self' https://unpkg.com; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   
   "web_accessible_resources": [
     {
       "resources": [
         "assets/*",
-        "Truthchain.jpeg"
+        "Truthchain.jpeg",
+        "*.js",
+        "*.wasm"
       ],
       "matches": ["<all_urls>"]
     }
@@ -78,7 +81,8 @@
       "https://explorer.stacks.co/*",
       "https://explorer.hiro.so/*",
       "https://*.web3.storage/*",
-      "https://*.ipfs.io/*"
+      "https://*.ipfs.io/*",
+      "https://unpkg.com/*"
     ]
   },
   
