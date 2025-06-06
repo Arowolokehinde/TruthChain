@@ -61,19 +61,40 @@ const App = () => {
               isDemoMode: response.walletData.isDemoMode
             });
             
-            const providerText = response.walletData.provider || 'unknown';
-            const modeText = response.walletData.isDemoMode ? ' (Demo Mode)' : ` via ${providerText}`;
-            alert(`🎉 Wallet Connected${modeText}!\n\n📍 Address: ${response.walletData.address.slice(0, 10)}...${response.walletData.address.slice(-6)}\n\n${response.walletData.isDemoMode ? '🎮 Demo mode - all features work but transactions are simulated' : '✅ Ready for real blockchain transactions'}`);
+            const walletName = response.walletData.walletName || 'Wallet';
+            const modeText = response.walletData.isDemoMode ? ' (Demo Mode)' : '';
+            
+            alert(
+              `🎉 ${walletName} Connected${modeText}!\n\n` +
+              `📍 Address: ${response.walletData.address.slice(0, 8)}...${response.walletData.address.slice(-6)}\n\n` +
+              `${response.walletData.isDemoMode 
+                ? '🎮 Demo mode active - transactions are simulated' 
+                : '✅ Ready for real blockchain transactions'
+              }`
+            );
           } else {
             console.error('Wallet connection failed:', response?.error);
             
             const errorMsg = response?.error || 'Unknown error';
-            if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
-              alert('🔗 Stacks Wallet Required\n\nTo use TruthChain, install one of these wallets:\n\n🥇 Xverse (Recommended)\n🥈 Leather (by Hiro)\n🥉 Asigna\n\nAfter installation:\n1. Create/import wallet\n2. Unlock it\n3. Try connecting again\n\nOr use Demo Mode to test features!');
-            } else if (errorMsg.includes('timeout')) {
-              alert('⏰ Connection Timeout\n\nPlease:\n1. Ensure your wallet is unlocked\n2. Check internet connection\n3. Try again\n\nIf issues persist, try refreshing the page.');
+            
+            if (errorMsg.includes('No Stacks wallet') || errorMsg.includes('not detected')) {
+              alert(
+                '🔗 Stacks Wallet Required\n\n' +
+                'Please install a Stacks wallet:\n\n' +
+                '🥇 Xverse Wallet (Recommended)\n' +
+                '   → Chrome Web Store → "Xverse Wallet"\n\n' +
+                '🥈 Leather Wallet\n' +
+                '   → Visit leather.io\n\n' +
+                'After installation:\n' +
+                '1. Set up your wallet\n' +
+                '2. Make sure it\'s unlocked\n' +
+                '3. Refresh this page\n' +
+                '4. Try connecting again'
+              );
+            } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected')) {
+              alert('⚠️ Connection Cancelled\n\nYou cancelled the wallet connection. Please try again when ready.');
             } else {
-              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTip: Make sure your Stacks wallet is unlocked and try again.`);
+              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTry:\n• Unlock your wallet\n• Refresh the page\n• Try again`);
             }
           }
           setIsLoading(false);
@@ -81,7 +102,7 @@ const App = () => {
       );
     } catch (error) {
       console.error('Error connecting wallet:', error);
-      alert('⚠️ Extension Error\n\nPlease refresh the extension and try again.\n\nIf the problem persists, try reloading the page.');
+      alert('⚠️ Extension Error\n\nPlease refresh the extension and try again.');
       setIsLoading(false);
     }
   };

@@ -31,15 +31,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.medium.com/*",
-        "https://*.substack.com/*",
-        "https://*.dev.to/*",
-        "https://*.hashnode.com/*",
-        "https://*.mirror.xyz/*",
-        "https://*.linkedin.com/*"
+        "<all_urls>"
       ],
       "js": ["content-script.js"],
-      "run_at": "document_idle",
+      "run_at": "document_start",
       "all_frames": false
     }
   ],

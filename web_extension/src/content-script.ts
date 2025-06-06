@@ -174,3 +174,178 @@ const observer = new MutationObserver(() => {
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
+
+// Content script to detect and interact with wallet providers
+console.log('TruthChain content script loaded');
+
+// Wait for wallet providers to inject
+let walletCheckInterval: NodeJS.Timeout;
+let walletDetected = false;
+
+// Check for wallet providers periodically
+const checkForWallets = () => {
+  if (walletDetected) return;
+  
+  const wallets = [];
+  
+  // Check for Xverse
+  if ((window as any).XverseProviders?.StacksProvider) {
+    wallets.push('xverse');
+    walletDetected = true;
+  }
+  
+  // Check for Leather
+  if ((window as any).LeatherProvider) {
+    wallets.push('leather');
+    walletDetected = true;
+  }
+  
+  // Check for other providers
+  if ((window as any).StacksProvider) {
+    wallets.push('stacks');
+    walletDetected = true;
+  }
+  
+  if (wallets.length > 0) {
+    console.log('TruthChain: Detected wallets:', wallets);
+    clearInterval(walletCheckInterval);
+    
+    // Store wallet availability in page context
+    (window as any).__truthchain_wallets_available = wallets;
+  }
+};
+
+// Start checking immediately and periodically
+checkForWallets();
+walletCheckInterval = setInterval(checkForWallets, 1000);
+
+// Stop checking after 30 seconds
+setTimeout(() => {
+  if (walletCheckInterval) {
+    clearInterval(walletCheckInterval);
+  }
+}, 30000);
+
+// Listen for messages from extension
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'detectWallets') {
+    sendResponse({
+      available: (window as any).__truthchain_wallets_available || [],
+      xverse: !!(window as any).XverseProviders?.StacksProvider,
+      leather: !!(window as any).LeatherProvider,
+      stacks: !!(window as any).StacksProvider
+    });
+  }
+  
+  if (request.action === 'connectWallet') {
+    connectWalletInPage().then(sendResponse).catch(error => {
+      sendResponse({ error: error.message });
+    });
+    return true; // Keep message channel open for async response
+  }
+});
+
+async function connectWalletInPage() {
+  console.log('TruthChain: Attempting wallet connection in page context');
+  
+  // Try Xverse first
+  if ((window as any).XverseProviders?.StacksProvider) {
+    try {
+      console.log('TruthChain: Connecting to Xverse...');
+      const provider = (window as any).XverseProviders.StacksProvider;
+      
+      const accounts = await provider.request('stx_requestAccounts');
+      console.log('TruthChain: Xverse accounts:', accounts);
+      
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts available in Xverse');
+      }
+      
+      const addressInfo = await provider.request('stx_getAddresses');
+      console.log('TruthChain: Xverse address info:', addressInfo);
+      
+      if (!addressInfo?.addresses?.length) {
+        throw new Error('Could not get address information');
+      }
+      
+      return {
+        success: true,
+        wallet: {
+          address: addressInfo.addresses[0].address,
+          publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
+          provider: 'xverse',
+          walletName: 'Xverse',
+          isConnected: true
+        }
+      };
+    } catch (error) {
+      console.error('TruthChain: Xverse connection failed:', error);
+      if (error.message?.includes('User rejected') || error.message?.includes('denied')) {
+        throw new Error('Connection cancelled by user');
+      }
+      // Try next wallet
+    }
+  }
+  
+  // Try Leather
+  if ((window as any).LeatherProvider) {
+    try {
+      console.log('TruthChain: Connecting to Leather...');
+      const provider = (window as any).LeatherProvider;
+      
+      const result = await provider.request('stx_requestAccounts');
+      console.log('TruthChain: Leather result:', result);
+      
+      if (!result) {
+        throw new Error('No response from Leather');
+      }
+      
+      let address = result;
+      if (result.addresses && Array.isArray(result.addresses)) {
+        address = result.addresses[0];
+      } else if (result.address) {
+        address = result.address;
+      }
+      
+      return {
+        success: true,
+        wallet: {
+          address: address,
+          publicKey: result.publicKey || 'leather-key',
+          provider: 'leather',
+          walletName: 'Leather',
+          isConnected: true
+        }
+      };
+    } catch (error) {
+      console.error('TruthChain: Leather connection failed:', error);
+      // Try next wallet
+    }
+  }
+  
+  // Try generic Stacks provider
+  if ((window as any).StacksProvider) {
+    try {
+      console.log('TruthChain: Connecting to generic Stacks provider...');
+      const provider = (window as any).StacksProvider;
+      
+      const accounts = await provider.request('stx_requestAccounts');
+      console.log('TruthChain: Generic provider accounts:', accounts);
+      
+      return {
+        success: true,
+        wallet: {
+          address: Array.isArray(accounts) ? accounts[0] : accounts,
+          publicKey: 'stacks-key',
+          provider: 'stacks',
+          walletName: 'Stacks Wallet',
+          isConnected: true
+        }
+      };
+    } catch (error) {
+      console.error('TruthChain: Generic provider connection failed:', error);
+    }
+  }
+  
+  throw new Error('No wallet providers found or all connections failed');
+}
