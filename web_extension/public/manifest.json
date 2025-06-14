@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Blog2Block - Web2 to Web3 Bridge",
+  "name": " TruthChain",
   "version": "1.0.0",
-  "description": "Bridge your web2 content to web3 using Stacks blockchain and decentralized storage.",
+  "description": "Decentralised Content Provenance Extension System built on the blockchain",
   "author": "TruthChain Team",
   
   "permissions": [
@@ -88,7 +88,7 @@
         "default": "Ctrl+Shift+B",
         "mac": "Command+Shift+B"
       },
-      "description": "Bridge current content to Web3"
+      "description": "Store contents on the blockchain"
     },
     "verify-content": {
       "suggested_key": {
