@@ -81,7 +81,6 @@
       (current-registrations (var-get total-registrations))
       (new-registration-id (+ current-registrations u1))
       (current-block stacks-block-height)
-      (current-time (unwrap-panic (get-stacks-block-info? time current-block)))
     )
     ;; Validation checks
     (asserts! (var-get contract-active) ERR-UNAUTHORIZED)
@@ -95,7 +94,7 @@
       {
         author: tx-sender,
         block-height: current-block,
-        time-stamp: current-time,
+        time-stamp: current-block,
         content-type: content-type,
         registration-id: new-registration-id
       }
@@ -116,7 +115,7 @@
       hash: hash,
       author: tx-sender,
       block-height: current-block,
-      timestamp: current-time
+      timestamp: current-block
     })
   )
 )
