@@ -169,16 +169,11 @@ export class RegistrationController {
           message: 'Transaction ID is required'
         });
       }
-
-      // TODO: Query database for registration details
-      // const registration = await this.databaseService.getRegistrationByTxId(txId);
-
       return res.json({
         success: true,
         message: 'Registration lookup by transaction ID',
         data: {
           txId,
-          // ...registration details from database
         }
       });
 
