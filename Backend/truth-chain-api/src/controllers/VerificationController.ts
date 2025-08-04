@@ -143,5 +143,93 @@ export class VerificationController {
       });
     }
   }
+
+
+
+
+
+  /**
+   * Batch verify multiple hashes or contents
+   * POST /api/verify/batch
+   */
+  async batchVerify(req: Request, res: Response): Promise<Response> {
+    try {
+      const { items }: { items: Array<{ content?: string; hash?: string }> } = req.body;
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Items array is required for batch verification'
+        });
+      }
+
+      if (items.length > 10) {
+        return res.status(400).json({
+          success: false,
+          message: 'Maximum 10 items allowed per batch request'
+        });
+      }
+
+      // Process each item
+      const results = [];
+      for (const item of items) {
+        let contentHash: Buffer;
+        let hashHex: string;
+
+        if (item.content) {
+          contentHash = HashService.generateContentHash(item.content);
+          hashHex = HashService.generateContentHashHex(item.content);
+        } else if (item.hash) {
+          hashHex = item.hash;
+          contentHash = HashService.hexToBuffer(item.hash);
+        } else {
+          results.push({
+            success: false,
+            verified: false,
+            error: 'Either content or hash required'
+          });
+          continue;
+        }
+
+        try {
+          const verification = await this.blockchainService.verifyTweet(contentHash);
+          
+          results.push({
+            success: true,
+            verified: !!verification,
+            hash: hashHex,
+            data: verification ? {
+              author: verification.author,
+              registeredAt: new Date(verification.timestamp * 1000).toISOString(),
+              blockHeight: verification.blockHeight,
+              registrationId: verification.registrationId,
+            } : null
+          });
+        } catch (error) {
+          results.push({
+            success: false,
+            verified: false,
+            hash: hashHex,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Batch verification completed for ${items.length} items`,
+        results: results
+      });
+
+    } catch (error) {
+      console.error('Error in batch verify:', error);
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Error during batch verification',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
   
 }
