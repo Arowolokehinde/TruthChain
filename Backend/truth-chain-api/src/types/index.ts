@@ -1,10 +1,10 @@
-import * as express from 'express';
-import * as cors from 'cors';
+import express from 'express';
+import cors from 'cors';
 import helmet from 'helmet';
-import * as morgan from 'morgan';
+import morgan from 'morgan';
 import apiRoutes from '../routes/index';
 
-// Create Express app
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -33,7 +33,6 @@ app.get('/', (_req: express.Request, res: express.Response) => {
       batchVerify: 'POST /api/verify/batch',
       checkRegistration: 'POST /api/check-registration'
     },
-    documentation: 'https://github.com/your-repo/truthchain-api'
   });
 });
 
@@ -49,7 +48,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 // 404 handler
-app.use('*', (_req: express.Request, res: express.Response) => {
+app.use('/*', (_req: express.Request, res: express.Response) => {
   res.status(404).json({
     success: false,
     message: 'Endpoint not found',
