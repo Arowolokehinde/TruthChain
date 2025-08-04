@@ -65,7 +65,9 @@ export class VerificationController {
       }
 
       // Verify on blockchain
+      console.log('Attempting to verify hash:', hashHex);
       const verification = await this.blockchainService.verifyTweet(contentHash);
+      console.log('Verification result:', verification);
 
       if (!verification) {
         return res.json({
@@ -85,7 +87,7 @@ export class VerificationController {
         data: {
           hash: hashHex,
           author: verification.author,
-          registeredAt: new Date(verification.timestamp * 1000).toISOString(),
+          registeredAt: new Date(verification.timestamp > 1000000000000 ? verification.timestamp : verification.timestamp * 1000).toISOString(),
           blockHeight: verification.blockHeight,
           registrationId: verification.registrationId,
         }
