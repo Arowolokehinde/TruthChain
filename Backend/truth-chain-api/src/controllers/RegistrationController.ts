@@ -111,4 +111,47 @@ export class RegistrationController {
     }
   }
 
+  /**
+   * Check if a tweet can be registered (pre-validation)
+   * POST /api/check-registration
+   */
+  async checkRegistration(req: Request, res: Response): Promise<Response> {
+    try {
+      const { tweetContent }: { tweetContent: string } = req.body;
+
+      if (!tweetContent) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tweet content is required'
+        });
+      }
+
+      // Generate hash and check existence
+      const contentHash = HashService.generateContentHash(tweetContent);
+      const hashHex = HashService.generateContentHashHex(tweetContent);
+      const exists = await this.blockchainService.hashExists(contentHash);
+
+      return res.json({
+        success: true,
+        data: {
+          hash: hashHex,
+          exists: exists,
+          canRegister: !exists,
+          message: exists 
+            ? 'Content already registered' 
+            : 'Content available for registration'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error checking registration:', error);
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Error checking registration status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
 }
