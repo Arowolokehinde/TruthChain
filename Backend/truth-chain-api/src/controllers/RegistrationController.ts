@@ -154,4 +154,43 @@ export class RegistrationController {
     }
   }
 
+
+  /**
+   * Get registration by transaction ID
+   * GET /api/registration/:txId
+   */
+  async getRegistrationByTxId(req: Request, res: Response): Promise<Response> {
+    try {
+      const { txId } = req.params;
+
+      if (!txId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Transaction ID is required'
+        });
+      }
+
+      // TODO: Query database for registration details
+      // const registration = await this.databaseService.getRegistrationByTxId(txId);
+
+      return res.json({
+        success: true,
+        message: 'Registration lookup by transaction ID',
+        data: {
+          txId,
+          // ...registration details from database
+        }
+      });
+
+    } catch (error) {
+      console.error('Error getting registration:', error);
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Error retrieving registration',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
 }
