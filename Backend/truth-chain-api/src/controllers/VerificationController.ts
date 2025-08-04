@@ -103,4 +103,45 @@ export class VerificationController {
     }
   }
 
+    /**
+   * Quick hash existence check
+   * GET /api/verify/:hash
+   */
+  async quickVerify(req: Request, res: Response): Promise<Response> {
+    try {
+      const { hash } = req.params;
+
+      if (!hash) {
+        return res.status(400).json({
+          success: false,
+          verified: false,
+          message: 'Hash parameter is required'
+        });
+      }
+
+      const contentHash = HashService.hexToBuffer(hash);
+      const exists = await this.blockchainService.hashExists(contentHash);
+
+      return res.json({
+        success: true,
+        verified: exists,
+        message: exists ? 'Content verified' : 'Content not found',
+        data: {
+          hash: hash,
+          exists: exists
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in quick verify:', error);
+      
+      return res.status(500).json({
+        success: false,
+        verified: false,
+        message: 'Error during quick verification',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+  
 }
