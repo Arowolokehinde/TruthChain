@@ -1,4 +1,4 @@
-import * as express from 'express';
+import express from 'express';
 import { RegistrationController } from '../controllers/RegistrationController';
 import { VerificationController } from '../controllers/VerificationController';
 import { BlockchainService } from '../services/BlockchainService';
@@ -8,7 +8,7 @@ const router = express.Router();
 // Initialize blockchain service
 const blockchainConfig = {
   contractAddress: process.env.CONTRACT_ADDRESS || 'ST3S9E18YKY18RQBR6WVZQ816C19R3FB3K3M0K3XX',
-  contractName: process.env.CONTRACT_NAME || 'truth-chain',
+  contractName: process.env.CONTRACT_NAME || 'Truth-Chain',
   network: (process.env.NETWORK as 'testnet' | 'mainnet') || 'testnet'
 };
 
