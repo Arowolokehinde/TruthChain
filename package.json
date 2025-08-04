@@ -1,7 +1,23 @@
 {
   "dependencies": {
+    "@stacks/auth": "^7.1.0",
+    "@stacks/network": "^7.0.2",
+    "@stacks/transactions": "^7.1.0",
     "@tailwindcss/vite": "^4.1.8",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "express": "^5.1.0",
     "firebase": "^11.6.0",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
     "tailwindcss": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
   }
 }
