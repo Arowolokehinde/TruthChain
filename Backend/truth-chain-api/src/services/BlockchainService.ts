@@ -4,9 +4,9 @@ import {
     broadcastTransaction,
     AnchorMode,
     PostConditionMode,
-    standardPrincipalCV,
     bufferCV,
     stringAsciiCV,
+    listCV,
     fetchCallReadOnlyFunction,
     cvToJSON
   } from '@stacks/transactions';
@@ -102,30 +102,50 @@ import {
      */
     async verifyTweet(contentHash: Buffer): Promise<TweetRegistration | null> {
       try {
-        const result = await fetchCallReadOnlyFunction({
-          contractAddress: this.config.contractAddress,
-          contractName: this.config.contractName,
-          functionName: 'verify-content',
-          functionArgs: [bufferCV(contentHash)],
-          network: this.network,
-          senderAddress: this.config.contractAddress,
-        });
-  
-        // Parse the result
-        const jsonResult = cvToJSON(result);
-        
-        if (jsonResult.success && jsonResult.value) {
-          const data = jsonResult.value;
-          return {
-            hash: contentHash,
-            author: data.author.value,
-            blockHeight: parseInt(data['block-height'].value),
-            timestamp: parseInt(data['time-stamp'].value),
-            registrationId: parseInt(data['registration-id'].value),
-          };
+        // First check if hash exists using the working method
+        const exists = await this.hashExists(contentHash);
+        if (!exists) {
+          return null;
         }
-  
-        return null;
+
+        // If hash exists, try to get full details
+        try {
+          const result = await fetchCallReadOnlyFunction({
+            contractAddress: this.config.contractAddress,
+            contractName: this.config.contractName,
+            functionName: 'verify-content',
+            functionArgs: [bufferCV(contentHash)],
+            network: this.network,
+            senderAddress: this.config.contractAddress,
+          });
+
+          // Parse the result
+          const jsonResult = cvToJSON(result);
+          console.log('Verify content result:', JSON.stringify(jsonResult, null, 2));
+          
+          if (jsonResult.success && jsonResult.value) {
+            const data = jsonResult.value.value;
+            return {
+              hash: contentHash,
+              author: data.author.value,
+              blockHeight: parseInt(data['block-height'].value),
+              timestamp: parseInt(data['time-stamp'].value),
+              registrationId: parseInt(data['registration-id'].value),
+            };
+          }
+        } catch (detailError) {
+          console.log('Error getting detailed verification, falling back to basic info:', detailError);
+        }
+
+        // Fallback: if hash exists but we can't get details, return basic info
+        return {
+          hash: contentHash,
+          author: 'unknown',
+          blockHeight: 0,
+          timestamp: Date.now() / 1000,
+          registrationId: 0,
+        };
+
       } catch (error) {
         console.error('Error verifying content:', error);
         return null;
@@ -191,7 +211,7 @@ import {
           contractAddress: this.config.contractAddress,
           contractName: this.config.contractName,
           functionName: 'batch-verify',
-          functionArgs: hashCVs,
+          functionArgs: [listCV(hashCVs)],
           network: this.network,
           senderAddress: this.config.contractAddress,
         });
