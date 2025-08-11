@@ -111,38 +111,42 @@ async function handleXverseConnection(): Promise<WalletData> {
       console.log('Content script method failed, trying direct injection:', error);
     }
     
-    // Wait a bit for content script to be ready
-    console.log('TruthChain: Waiting for content script to initialize...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Give wallets time to inject, then use content script (which runs in right context)
+    console.log('TruthChain: Waiting 5 seconds for wallet providers to inject...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
-    // Try content script again with longer timeout
+    // Content script runs in the right context and should see wallets
     try {
-      console.log('TruthChain: Second attempt with content script...');
+      console.log('TruthChain: Using content script for wallet detection after delay...');
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('Second content script detection response:', response);
+      console.log('Content script detection after delay:', response);
       
       if (response && (response.xverse || response.leather || response.stacks || response.available?.length > 0)) {
-        console.log('TruthChain: Wallets detected on second attempt!');
+        console.log('TruthChain: Wallets detected via content script! Attempting connection...');
         const connectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'connectWallet' });
-        console.log('Second attempt connection response:', connectionResponse);
+        console.log('Content script connection response:', connectionResponse);
         
         if (connectionResponse && connectionResponse.success) {
           const walletData = connectionResponse.wallet;
           await chrome.storage.local.set({ walletData });
-          console.log('TruthChain: Successfully connected on second attempt!');
+          console.log('TruthChain: Successfully connected via content script!');
           return walletData;
+        } else if (connectionResponse && connectionResponse.error) {
+          throw new Error('Content script connection failed: ' + connectionResponse.error);
         }
+      } else {
+        console.log('TruthChain: No wallets detected via content script');
       }
-    } catch (secondAttemptError) {
-      console.log('Second content script attempt failed:', secondAttemptError);
+    } catch (contentScriptError) {
+      console.log('Content script approach failed:', contentScriptError);
     }
     
     // Final fallback: direct injection
     try {
-      console.log('TruthChain: Final fallback - direct script injection...');
+      console.log('TruthChain: Final attempt - direct script injection with longer wait...');
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        function: detectAndConnectWallet
+        function: detectAndConnectWalletWithDelay
       });
 
       const walletData = results[0].result;
@@ -171,7 +175,60 @@ async function handleXverseConnection(): Promise<WalletData> {
   }
 }
 
-// Simplified wallet detection function for direct injection
+// Wallet detection with longer delay for Xverse injection
+function detectAndConnectWalletWithDelay() {
+  return new Promise((resolve, reject) => {
+    console.log('TruthChain: Waiting 4 seconds for wallet injection...');
+    
+    setTimeout(() => {
+      console.log('TruthChain: Checking for wallets after delay...');
+      console.log('Script context window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('xverse')));
+      
+      // Use executeScript with MAIN world to bypass CSP
+      console.log('Attempting main world script execution...');
+      
+      // Direct approach - check if we can see Xverse in this context
+      if ((window as any).XverseProviders?.StacksProvider) {
+        console.log('TruthChain: Xverse found! Attempting connection...');
+        try {
+          const provider = (window as any).XverseProviders.StacksProvider;
+          provider.request('stx_requestAccounts')
+            .then((accounts: any) => {
+              if (accounts && accounts.length > 0) {
+                return provider.request('stx_getAddresses');
+              }
+              throw new Error('No accounts available');
+            })
+            .then((addressInfo: any) => {
+              if (addressInfo?.addresses?.length) {
+                resolve({
+                  address: addressInfo.addresses[0].address,
+                  publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
+                  provider: 'xverse',
+                  walletName: 'Xverse',
+                  isConnected: true
+                });
+                return;
+              }
+              throw new Error('No address info available');
+            })
+            .catch((error: any) => {
+              console.error('Xverse connection error:', error);
+              reject(new Error('Xverse connection failed: ' + error.message));
+            });
+        } catch (error) {
+          console.error('Xverse connection error:', error);
+          reject(new Error('Xverse connection failed: ' + (error as Error).message));
+        }
+        
+      } else {
+        reject(new Error('Xverse wallet not found after waiting. Please make sure Xverse is installed and unlocked.'));
+      }
+    }, 4000);
+  });
+}
+
+// Original wallet detection function for backup
 function detectAndConnectWallet() {
   return new Promise((resolve, reject) => {
     console.log('TruthChain: Direct wallet detection starting...');
