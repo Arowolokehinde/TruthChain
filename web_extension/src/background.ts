@@ -135,11 +135,23 @@ async function handleXverseConnection(): Promise<WalletData> {
 // Simplified wallet detection function for direct injection
 function detectAndConnectWallet() {
   return new Promise((resolve, reject) => {
-    console.log('TruthChain: Direct wallet detection');
+    console.log('TruthChain: Direct wallet detection starting...');
+    console.log('Window object keys containing "xverse" or "stacks":', 
+      Object.keys(window).filter(k => 
+        k.toLowerCase().includes('xverse') || 
+        k.toLowerCase().includes('stacks') ||
+        k.toLowerCase().includes('leather') ||
+        k.toLowerCase().includes('hiro')
+      )
+    );
+    console.log('XverseProviders available:', !!(window as any).XverseProviders);
+    console.log('XverseProviders.StacksProvider available:', !!(window as any).XverseProviders?.StacksProvider);
+    console.log('LeatherProvider available:', !!(window as any).LeatherProvider);
     
     // Add timeout to prevent hanging
     const timeout = setTimeout(() => {
-      reject(new Error('Wallet detection timeout'));
+      console.log('TruthChain: Wallet detection timed out after 15 seconds');
+      reject(new Error('Wallet detection timeout - no wallet providers responded'));
     }, 15000);
     
     // Check immediately first

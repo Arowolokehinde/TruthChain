@@ -23,7 +23,10 @@
     "https://*.ghost.io/*",
     "https://*.notion.site/*",
     "https://*.wordpress.com/*",
-    "https://*.blogspot.com/*"
+    "https://*.blogspot.com/*",
+    "https://*.google.com/*",
+    "https://*.youtube.com/*",
+    "https://*.github.com/*"
   ],
   
   "background": {
@@ -44,7 +47,10 @@
         "https://*.ghost.io/*",
         "https://*.notion.site/*",
         "https://*.wordpress.com/*",
-        "https://*.blogspot.com/*"
+        "https://*.blogspot.com/*",
+        "https://*.google.com/*",
+        "https://*.youtube.com/*",
+        "https://*.github.com/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle",
