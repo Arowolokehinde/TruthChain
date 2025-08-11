@@ -4,7 +4,6 @@ interface WalletState {
   isConnected: boolean;
   address: string | null;
   publicKey: string | null;
-  isDemoMode?: boolean;
 }
 
 interface ContentState {
@@ -62,20 +61,15 @@ const App = () => {
             setWallet({
               isConnected: true,
               address: response.walletData.address,
-              publicKey: response.walletData.publicKey,
-              isDemoMode: response.walletData.isDemoMode
+              publicKey: response.walletData.publicKey
             });
             
             const walletName = response.walletData.walletName || 'Wallet';
-            const modeText = response.walletData.isDemoMode ? ' (Demo Mode)' : '';
             
             alert(
-              `🎉 ${walletName} Connected${modeText}!\n\n` +
+              `🎉 ${walletName} Connected!\n\n` +
               `📍 Address: ${response.walletData.address.slice(0, 8)}...${response.walletData.address.slice(-6)}\n\n` +
-              `${response.walletData.isDemoMode 
-                ? '🎮 Demo mode active - transactions are simulated' 
-                : '✅ Ready for real blockchain transactions'
-              }`
+              `✅ Ready for real blockchain transactions`
             );
           } else {
             console.error('Wallet connection failed:', response?.error);
