@@ -83,6 +83,12 @@ async function handleXverseConnection(): Promise<WalletData> {
       throw new Error('No active tab found');
     }
     
+    // Check if it's a valid URL for injection (not chrome:// or extension:// URLs)
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      console.log('Cannot inject into special pages, showing demo mode');
+      return await handleDemoMode();
+    }
+    
     // First, check if we can detect wallets via content script
     try {
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
@@ -102,19 +108,26 @@ async function handleXverseConnection(): Promise<WalletData> {
       console.log('Content script method failed, trying direct injection:', error);
     }
     
-    // Fallback: Inject script directly
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      function: detectAndConnectWallet
-    });
+    // Fallback: Inject script directly (only if not in special pages)
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: detectAndConnectWallet
+      });
 
-    const walletData = results[0].result;
-    if (walletData) {
-      await chrome.storage.local.set({ walletData });
-      return walletData;
-    } else {
-      throw new Error('No Stacks wallet found or connection failed');
+      const walletData = results[0].result;
+      if (walletData) {
+        await chrome.storage.local.set({ walletData });
+        return walletData;
+      }
+    } catch (injectionError) {
+      console.log('Script injection failed:', injectionError);
+      // Fall back to demo mode instead of throwing
+      return await handleDemoMode();
     }
+    
+    // If all else fails, offer demo mode
+    return await handleDemoMode();
   } catch (error) {
     console.error('Wallet connection error:', error);
     throw error;
@@ -123,18 +136,26 @@ async function handleXverseConnection(): Promise<WalletData> {
 
 // Simplified wallet detection function for direct injection
 function detectAndConnectWallet() {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     console.log('TruthChain: Direct wallet detection');
+    
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      reject(new Error('Wallet detection timeout'));
+    }, 15000);
     
     // Check immediately first
     if ((window as any).XverseProviders?.StacksProvider) {
       try {
         const provider = (window as any).XverseProviders.StacksProvider;
-        const accounts = await provider.request('stx_requestAccounts');
-        
-        if (accounts && accounts.length > 0) {
-          const addressInfo = await provider.request('stx_getAddresses');
+        provider.request('stx_requestAccounts').then((accounts: any) => {
+          if (accounts && accounts.length > 0) {
+            return provider.request('stx_getAddresses');
+          }
+          throw new Error('No accounts available');
+        }).then((addressInfo: any) => {
           if (addressInfo?.addresses?.length) {
+            clearTimeout(timeout);
             resolve({
               address: addressInfo.addresses[0].address,
               publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
@@ -144,64 +165,76 @@ function detectAndConnectWallet() {
             });
             return;
           }
-        }
+          throw new Error('No address info available');
+        }).catch((error: any) => {
+          console.error('Direct Xverse connection failed:', error);
+          // Try next wallet instead of returning
+        });
       } catch (error) {
         console.error('Direct Xverse connection failed:', error);
       }
     }
     
-    // Check for Leather
+    // Check for Leather with timeout handling
     if ((window as any).LeatherProvider) {
       try {
         const provider = (window as any).LeatherProvider;
-        const result = await provider.request('stx_requestAccounts');
-        
-        if (result) {
-          let address = result;
-          if (result.addresses && Array.isArray(result.addresses)) {
-            address = result.addresses[0];
+        provider.request('stx_requestAccounts').then((result: any) => {
+          if (result) {
+            let address = result;
+            if (result.addresses && Array.isArray(result.addresses)) {
+              address = result.addresses[0];
+            }
+            
+            clearTimeout(timeout);
+            resolve({
+              address: address,
+              publicKey: result.publicKey || 'leather-key',
+              provider: 'leather',
+              walletName: 'Leather',
+              isConnected: true
+            });
+            return;
           }
-          
-          resolve({
-            address: address,
-            publicKey: result.publicKey || 'leather-key',
-            provider: 'leather',
-            walletName: 'Leather',
-            isConnected: true
-          });
-          return;
-        }
+          throw new Error('No result from Leather');
+        }).catch((error: any) => {
+          console.error('Direct Leather connection failed:', error);
+          // Try demo mode as fallback
+        });
       } catch (error) {
         console.error('Direct Leather connection failed:', error);
       }
     }
     
-    // No wallets found - offer demo mode
-    const useDemo = confirm(
-      '🔗 Stacks Wallet Connection\n\n' +
-      'No Stacks wallet detected or connection failed.\n\n' +
-      'This could happen if:\n' +
-      '• No Stacks wallet is installed\n' +
-      '• Wallet is locked\n' +
-      '• You denied the connection request\n\n' +
-      'Install a Stacks wallet:\n' +
-      '🥇 Xverse - Chrome Web Store\n' +
-      '🥈 Leather - leather.io\n\n' +
-      'Or try Demo Mode to test features?\n' +
-      '(Simulates all functionality)'
-    );
-    
-    if (useDemo) {
-      resolve({
-        address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-        publicKey: 'demo-public-key',
-        isDemoMode: true,
-        provider: 'demo',
-        walletName: 'Demo Mode'
-      });
-    } else {
-      reject(new Error('Please install and unlock a Stacks wallet, then try again.'));
-    }
+    // Fallback to demo mode after a short delay if no wallets respond
+    setTimeout(() => {
+      const useDemo = confirm(
+        '🔗 Stacks Wallet Connection\n\n' +
+        'No Stacks wallet detected or connection failed.\n\n' +
+        'This could happen if:\n' +
+        '• No Stacks wallet is installed\n' +
+        '• Wallet is locked\n' +
+        '• You denied the connection request\n\n' +
+        'Install a Stacks wallet:\n' +
+        '🥇 Xverse - Chrome Web Store\n' +
+        '🥈 Leather - leather.io\n\n' +
+        'Try Demo Mode to test features?\n' +
+        '(Simulates all functionality)'
+      );
+      
+      clearTimeout(timeout);
+      if (useDemo) {
+        resolve({
+          address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+          publicKey: 'demo-public-key',
+          isDemoMode: true,
+          provider: 'demo',
+          walletName: 'Demo Mode'
+        });
+      } else {
+        reject(new Error('Please install and unlock a Stacks wallet, then try again.'));
+      }
+    }, 3000); // Give wallets 3 seconds to respond
   });
 }
 
@@ -485,4 +518,17 @@ async function executeVerifyCommand(): Promise<void> {
   } catch (error) {
     console.error('Failed to execute verify command:', error);
   }
+}
+
+// Handle demo mode when real wallets can't be accessed
+async function handleDemoMode(): Promise<WalletData> {
+  console.log('TruthChain: Offering demo mode');
+  
+  return {
+    address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+    publicKey: 'demo-public-key-for-testing',
+    isDemoMode: true,
+    provider: 'demo',
+    walletName: 'Demo Mode'
+  };
 }

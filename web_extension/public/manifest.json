@@ -1,16 +1,15 @@
 {
   "manifest_version": 3,
-  "name": " TruthChain",
+  "name": "TruthChain",
   "version": "1.0.0",
-  "description": "Decentralised Content Provenance Extension System built on the blockchain",
+  "description": "Verify and protect your digital content authenticity on the blockchain. Register content ownership and detect unauthorized modifications with TruthChain's decentralized provenance system.",
   "author": "TruthChain Team",
   
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "notifications",
-    "tabs"
+    "notifications"
   ],
   
   "host_permissions": [
@@ -20,7 +19,11 @@
     "https://*.hashnode.com/*",
     "https://*.mirror.xyz/*",
     "https://*.linkedin.com/*",
-    "<all_urls>"
+    "https://*.github.io/*",
+    "https://*.ghost.io/*",
+    "https://*.notion.site/*",
+    "https://*.wordpress.com/*",
+    "https://*.blogspot.com/*"
   ],
   
   "background": {
@@ -31,10 +34,20 @@
   "content_scripts": [
     {
       "matches": [
-        "<all_urls>"
+        "https://*.medium.com/*",
+        "https://*.substack.com/*",
+        "https://*.dev.to/*",
+        "https://*.hashnode.com/*",
+        "https://*.mirror.xyz/*",
+        "https://*.linkedin.com/*",
+        "https://*.github.io/*",
+        "https://*.ghost.io/*",
+        "https://*.notion.site/*",
+        "https://*.wordpress.com/*",
+        "https://*.blogspot.com/*"
       ],
       "js": ["content-script.js"],
-      "run_at": "document_start",
+      "run_at": "document_idle",
       "all_frames": false
     }
   ],
@@ -43,31 +56,28 @@
     "default_popup": "index.html",
     "default_title": "TruthChain",
     "default_icon": {
-      "16": "Truthchain.jpeg",
-      "32": "Truthchain.jpeg",
-      "48": "Truthchain.jpeg",
-      "128": "Truthchain.jpeg"
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
     }
   },
   
   "icons": {
-    "16": "Truthchain.jpeg",
-    "32": "Truthchain.jpeg",
-    "48": "Truthchain.jpeg",
-    "128": "Truthchain.jpeg"
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   },
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stacks.co https://*.hiro.so https://*.web3.storage https://*.ipfs.io;"
   },
   
   "web_accessible_resources": [
     {
       "resources": [
         "assets/*",
-        "Truthchain.jpeg",
-        "*.js",
-        "*.wasm"
+        "*.png",
+        "*.js"
       ],
       "matches": ["<all_urls>"]
     }
@@ -77,8 +87,7 @@
     "matches": [
       "https://explorer.stacks.co/*",
       "https://explorer.hiro.so/*",
-      "https://*.web3.storage/*",
-      "https://*.ipfs.io/*"
+      "https://truth-chain.vercel.app/*"
     ]
   },
   
@@ -101,5 +110,17 @@
   
   "homepage_url": "https://truth-chain.vercel.app/",
   
-  "minimum_chrome_version": "88"
+  "minimum_chrome_version": "88",
+  
+  "short_name": "TruthChain",
+  "offline_enabled": false,
+  
+  "incognito": "split",
+  
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  
+  "options_ui": {
+    "page": "index.html",
+    "open_in_tab": false
+  }
 }
