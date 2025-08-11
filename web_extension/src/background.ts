@@ -90,16 +90,20 @@ async function handleXverseConnection(): Promise<WalletData> {
     
     // First, check if we can detect wallets via content script
     try {
+      console.log('TruthChain: Trying content script wallet detection...');
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('Wallet detection response:', response);
+      console.log('Content script wallet detection response:', response);
       
       if (response && (response.xverse || response.leather || response.stacks)) {
+        console.log('TruthChain: Wallets found via content script, attempting connection...');
         // Try connecting via content script
         const connectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'connectWallet' });
+        console.log('Content script connection response:', connectionResponse);
         
         if (connectionResponse && connectionResponse.success) {
           const walletData = connectionResponse.wallet;
           await chrome.storage.local.set({ walletData });
+          console.log('TruthChain: Successfully connected via content script!');
           return walletData;
         }
       }
@@ -107,8 +111,35 @@ async function handleXverseConnection(): Promise<WalletData> {
       console.log('Content script method failed, trying direct injection:', error);
     }
     
-    // Fallback: Inject script directly (only if not in special pages)
+    // Wait a bit for content script to be ready
+    console.log('TruthChain: Waiting for content script to initialize...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Try content script again with longer timeout
     try {
+      console.log('TruthChain: Second attempt with content script...');
+      const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
+      console.log('Second content script detection response:', response);
+      
+      if (response && (response.xverse || response.leather || response.stacks || response.available?.length > 0)) {
+        console.log('TruthChain: Wallets detected on second attempt!');
+        const connectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'connectWallet' });
+        console.log('Second attempt connection response:', connectionResponse);
+        
+        if (connectionResponse && connectionResponse.success) {
+          const walletData = connectionResponse.wallet;
+          await chrome.storage.local.set({ walletData });
+          console.log('TruthChain: Successfully connected on second attempt!');
+          return walletData;
+        }
+      }
+    } catch (secondAttemptError) {
+      console.log('Second content script attempt failed:', secondAttemptError);
+    }
+    
+    // Final fallback: direct injection
+    try {
+      console.log('TruthChain: Final fallback - direct script injection...');
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         function: detectAndConnectWallet
@@ -117,15 +148,23 @@ async function handleXverseConnection(): Promise<WalletData> {
       const walletData = results[0].result;
       if (walletData) {
         await chrome.storage.local.set({ walletData });
+        console.log('TruthChain: Direct injection successful!');
         return walletData;
       }
     } catch (injectionError) {
       console.log('Script injection failed:', injectionError);
-      throw new Error('Failed to detect wallets. Please make sure you have a Stacks wallet (Xverse or Leather) installed and unlocked.');
     }
     
-    // If we get here, no wallet was found
-    throw new Error('No Stacks wallet found. Please install Xverse or Leather wallet extension and make sure it is unlocked.');
+    // If all methods fail
+    console.log('TruthChain: All wallet detection methods failed');
+    throw new Error(
+      'No Stacks wallet found or accessible.\n\n' +
+      'Please ensure:\n' +
+      '• Xverse or Leather wallet is installed\n' +
+      '• Wallet is unlocked\n' +
+      '• Page has finished loading\n' +
+      '• Try refreshing the page'
+    );
   } catch (error) {
     console.error('Wallet connection error:', error);
     throw error;
