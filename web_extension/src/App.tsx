@@ -317,22 +317,25 @@ const App = () => {
             </div>
           </div>
 
-          {/* Operations Section */}
-          {wallet.isConnected && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between'>
-                <h3 className='text-base font-bold text-slate-800'>Blockchain Operations</h3>
-                <div className='flex items-center space-x-1 text-xs text-slate-500'>
-                  <div className='w-2 h-2 bg-green-400 rounded-full animate-pulse'></div>
-                  <span>Live</span>
-                </div>
+          {/* Operations Section - Always Available */}
+          <div className='space-y-4'>
+            <div className='flex items-center justify-between'>
+              <h3 className='text-base font-bold text-slate-800'>TruthChain Operations</h3>
+              <div className='flex items-center space-x-1 text-xs text-slate-500'>
+                <div className={`w-2 h-2 rounded-full ${wallet.isConnected ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`}></div>
+                <span>{wallet.isConnected ? 'Live' : 'Read-Only'}</span>
               </div>
+            </div>
               
               {/* Register Content Button */}
               <button
-                onClick={registerContentOnTruthChain}
+                onClick={wallet.isConnected ? registerContentOnTruthChain : () => alert('Please connect your Stacks wallet to register content on the blockchain')}
                 disabled={content.isProcessing}
-                className='w-full bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 text-white py-4 px-5 rounded-xl font-semibold hover:from-teal-700 hover:via-cyan-700 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 border border-teal-500/20 group'
+                className={`w-full py-4 px-5 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 border group ${
+                  wallet.isConnected 
+                    ? 'bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 text-white hover:from-teal-700 hover:via-cyan-700 hover:to-teal-700 border-teal-500/20'
+                    : 'bg-gradient-to-r from-gray-400 via-gray-500 to-gray-400 text-white hover:from-gray-500 hover:via-gray-600 hover:to-gray-500 border-gray-400/20'
+                }`}
               >
                 <div className='flex items-center'>
                   <div className='w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mr-4 group-hover:scale-105 transition-transform duration-200'>
@@ -346,10 +349,16 @@ const App = () => {
                   </div>
                   <div className='text-left flex-1'>
                     <div className='font-bold text-sm'>
-                      {content.isProcessing && content.lastAction === 'registering' ? 'Registering Content...' : 'Register Content'}
+                      {content.isProcessing && content.lastAction === 'registering' 
+                        ? 'Registering Content...' 
+                        : wallet.isConnected 
+                          ? 'Register Content' 
+                          : 'Register Content (Wallet Required)'}
                     </div>
-                    <div className='text-xs text-teal-100 font-medium opacity-90'>
-                      Store content on IPFS + TruthChain blockchain
+                    <div className='text-xs font-medium opacity-90'>
+                      {wallet.isConnected 
+                        ? 'Store content on IPFS + TruthChain blockchain'
+                        : 'Connect wallet to register content on blockchain'}
                     </div>
                   </div>
                   <svg className='w-4 h-4 text-white/80 group-hover:translate-x-1 transition-transform duration-200' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -358,7 +367,7 @@ const App = () => {
                 </div>
               </button>
               
-              {/* Verify Content Button */}
+              {/* Verify Content Button - Always Available */}
               <button
                 onClick={verifyContentOnTruthChain}
                 disabled={content.isProcessing}
@@ -472,32 +481,41 @@ const App = () => {
                 </div>
               )}
             </div>
-          )}
 
-          {/* Empty State */}
+          {/* Read-Only Info */}
           {!wallet.isConnected && (
-            <div className='text-center py-8 space-y-4'>
-              <div className='w-16 h-16 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mx-auto border border-teal-200/50'>
-                <div className='w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg opacity-60'></div>
+            <div className='bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/60 rounded-xl overflow-hidden'>
+              <div className='bg-blue-100/60 px-4 py-3 border-b border-blue-200/50'>
+                <div className='flex items-center space-x-2'>
+                  <svg className='w-4 h-4 text-blue-600' fill='currentColor' viewBox='0 0 20 20'>
+                    <path fillRule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clipRule='evenodd' />
+                  </svg>
+                  <span className='text-sm font-semibold text-blue-800'>Read-Only Mode</span>
+                </div>
               </div>
-              <div className='space-y-2'>
-                <h3 className='text-base font-bold text-slate-700'>TruthChain Ready</h3>
-                <p className='text-slate-500 text-sm leading-relaxed max-w-sm mx-auto'>
-                  Secure your digital content with blockchain-powered authenticity. Connect your wallet to begin.
+              <div className='p-4'>
+                <p className='text-blue-700 text-sm mb-3'>
+                  TruthChain works in <strong>read-only mode</strong> without a wallet connection. You can:
                 </p>
-              </div>
-              <div className='flex items-center justify-center space-x-6 pt-2'>
-                <div className='flex items-center space-x-1.5 text-xs text-slate-400'>
-                  <div className='w-2 h-2 bg-teal-400 rounded-full'></div>
-                  <span>IPFS</span>
-                </div>
-                <div className='flex items-center space-x-1.5 text-xs text-slate-400'>
-                  <div className='w-2 h-2 bg-cyan-400 rounded-full'></div>
-                  <span>TruthChain</span>
-                </div>
-                <div className='flex items-center space-x-1.5 text-xs text-slate-400'>
-                  <div className='w-2 h-2 bg-emerald-400 rounded-full'></div>
-                  <span>Secure</span>
+                <ul className='text-blue-600 text-sm space-y-1 mb-4'>
+                  <li className='flex items-center'><span className='text-green-500 mr-2'>✓</span>Verify existing content</li>
+                  <li className='flex items-center'><span className='text-green-500 mr-2'>✓</span>Analyze content hashes</li>
+                  <li className='flex items-center'><span className='text-green-500 mr-2'>✓</span>Check content authenticity</li>
+                  <li className='flex items-center'><span className='text-orange-500 mr-2'>⚠</span>Register new content (requires wallet)</li>
+                </ul>
+                <div className='flex items-center justify-center space-x-6 pt-2 border-t border-blue-200/50'>
+                  <div className='flex items-center space-x-1.5 text-xs text-blue-500'>
+                    <div className='w-2 h-2 bg-teal-400 rounded-full'></div>
+                    <span>IPFS</span>
+                  </div>
+                  <div className='flex items-center space-x-1.5 text-xs text-blue-500'>
+                    <div className='w-2 h-2 bg-cyan-400 rounded-full'></div>
+                    <span>TruthChain</span>
+                  </div>
+                  <div className='flex items-center space-x-1.5 text-xs text-blue-500'>
+                    <div className='w-2 h-2 bg-emerald-400 rounded-full'></div>
+                    <span>Stacks</span>
+                  </div>
                 </div>
               </div>
             </div>
