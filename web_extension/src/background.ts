@@ -42,13 +42,13 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
       return true;
 
     case 'bridgeToWeb3':
-      handleContentBridge()
+      handleContentBridge(request)
         .then(result => sendResponse({ success: true, data: result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
     case 'verifyOnChain':
-      handleChainVerification()
+      handleChainVerification(request)
         .then(result => sendResponse({ success: true, data: result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -326,17 +326,25 @@ function detectAndConnectWallet() {
   });
 }
 
-async function handleContentBridge(): Promise<BridgeResult> {
+async function handleContentBridge(request?: any): Promise<BridgeResult> {
   try {
-    // Get current tab content
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let content;
     
-    const contentResults = await chrome.scripting.executeScript({
-      target: { tabId: tab.id! },
-      function: extractPageContent
-    });
+    // Use provided content data or extract from page
+    if (request?.contentData) {
+      content = request.contentData;
+    } else {
+      // Get current tab content
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      const contentResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id! },
+        function: extractPageContent
+      });
 
-    const content = contentResults[0].result;
+      content = contentResults[0].result;
+    }
+    
     if (!content) {
       throw new Error('No content found to bridge');
     }
@@ -344,47 +352,94 @@ async function handleContentBridge(): Promise<BridgeResult> {
     // Get wallet data
     const storage = await chrome.storage.local.get('walletData');
     if (!storage.walletData) {
-      throw new Error('No wallet connected');
+      throw new Error('No wallet connected - please connect your Stacks wallet first');
     }
 
-    // Store to IPFS
-    const cid = await storeToIPFS(content);
+    // Enhanced content processing
+    const processedContent = {
+      ...content,
+      registrationTimestamp: new Date().toISOString(),
+      creator: storage.walletData.address,
+      contentHash: content.hash || await generateContentHash(content),
+      integrity: {
+        method: 'SHA-256',
+        original: true,
+        verified: false
+      }
+    };
+
+    // Store to IPFS with metadata
+    const cid = await storeToIPFS(processedContent);
     
-    // Anchor to Stacks blockchain using real provider
+    // Register on Stacks blockchain
     let txId;
+    let registrationStatus = 'pending';
+    
     try {
-      txId = await anchorToStacks(cid, storage.walletData.address, { network: 'testnet' });
+      // Call register-content function from smart contract
+      txId = await anchorToStacks(cid, storage.walletData.address, { 
+        network: 'testnet',
+        functionName: 'register-content',
+        functionArgs: [
+          processedContent.contentHash,
+          processedContent.title || 'Untitled',
+          processedContent.type || 'webpage'
+        ]
+      });
+      registrationStatus = 'confirmed';
     } catch (error) {
       console.error('Real Stacks transaction failed, using simulation:', error);
-      // Fallback to simulation
+      // Fallback to simulation for development
       const timestamp = Date.now();
       const random = Math.random().toString(16).slice(2, 10);
       txId = `0x${timestamp.toString(16)}${random}`;
+      registrationStatus = 'simulated';
     }
     
     const bridgeResult: BridgeResult = {
       cid,
       txId,
-      timestamp: new Date().toISOString()
+      timestamp: processedContent.registrationTimestamp
     };
 
-    // Store bridge record locally
-    const contentHash = await generateContentHash(content);
+    // Store comprehensive bridge record
+    const contentHash = processedContent.contentHash;
     await chrome.storage.local.set({
       [`bridge_${contentHash}`]: {
         ...bridgeResult,
-        content,
+        content: processedContent,
         walletAddress: storage.walletData.address,
-        isReal: !storage.walletData.isDemoMode
+        registrationStatus,
+        platform: content.hostname,
+        author: content.author,
+        contentType: content.type,
+        isReal: registrationStatus === 'confirmed'
       }
     });
 
-    // Send notification
+    // Update user's content registry
+    const userKey = `user_content_${storage.walletData.address}`;
+    const userStorage = await chrome.storage.local.get(userKey);
+    const userContent = userStorage[userKey] || [];
+    
+    userContent.unshift({
+      cid,
+      txId,
+      title: content.title,
+      timestamp: bridgeResult.timestamp,
+      url: content.url,
+      type: content.type,
+      status: registrationStatus
+    });
+    
+    await chrome.storage.local.set({ [userKey]: userContent.slice(0, 100) }); // Keep last 100
+
+    // Enhanced notification
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'Truthchain.jpeg',
-      title: 'Content Bridged to Web3',
-      message: `"${content.title}" has been ${storage.walletData.isDemoMode ? 'simulated as' : ''} stored on IPFS and anchored to Stacks blockchain`
+      title: 'Content Registered on TruthChain',
+      message: `"${content.title}" ${registrationStatus === 'confirmed' ? 'successfully registered' : 'simulated registration'} on blockchain`
     });
 
     return bridgeResult;
@@ -394,52 +449,92 @@ async function handleContentBridge(): Promise<BridgeResult> {
   }
 }
 
-async function handleChainVerification(): Promise<any> {
+async function handleChainVerification(request?: any): Promise<any> {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let content;
+    const isSilent = request?.silent;
     
-    const contentResults = await chrome.scripting.executeScript({
-      target: { tabId: tab.id! },
-      function: extractPageContent
-    });
+    // Use provided content data or extract from page
+    if (request?.contentData) {
+      content = request.contentData;
+    } else {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      const contentResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id! },
+        function: extractPageContent
+      });
 
-    const content = contentResults[0].result;
-    const contentHash = await generateContentHash(content);
+      content = contentResults[0].result;
+    }
     
-    // Check local storage first
+    const contentHash = content.hash || await generateContentHash(content);
+    
+    // Check local storage first (fastest)
     const stored = await chrome.storage.local.get(`bridge_${contentHash}`);
     const bridgeRecord = stored[`bridge_${contentHash}`];
     
     if (bridgeRecord) {
-      return {
+      const result = {
         isRegistered: true,
         owner: bridgeRecord.walletAddress,
         timestamp: bridgeRecord.timestamp,
         cid: bridgeRecord.cid,
-        txId: bridgeRecord.txId
+        txId: bridgeRecord.txId,
+        status: bridgeRecord.registrationStatus || 'confirmed',
+        platform: bridgeRecord.platform,
+        author: bridgeRecord.author,
+        contentType: bridgeRecord.contentType,
+        source: 'local'
       };
+      
+      if (!isSilent) {
+        console.log('Content verified from local storage:', result);
+      }
+      return result;
     }
 
-    // Verify on Stacks blockchain
+    // Verify on Stacks blockchain using verify-content function
     try {
-      const cid = `Qm${contentHash.slice(0, 44)}`;
-      const verification = await verifyOnStacks(cid);
+      const verification = await verifyOnStacks(contentHash, {
+        network: 'testnet',
+        functionName: 'verify-content'
+      });
       
       if (verification.exists) {
-        return {
+        const result = {
           isRegistered: true,
           owner: verification.owner,
           timestamp: verification.timestamp,
-          blockHeight: verification.blockHeight
+          blockHeight: verification.blockHeight,
+          source: 'blockchain'
         };
+        
+        if (!isSilent) {
+          console.log('Content verified on blockchain:', result);
+        }
+        return result;
       }
     } catch (error) {
-      console.log('Blockchain verification failed, checking local only');
+      if (!isSilent) {
+        console.log('Blockchain verification failed, content not found:', error.message);
+      }
+    }
+
+    // Check if content was modified (integrity check)
+    if (request?.originalHash && request.originalHash !== contentHash) {
+      return {
+        isRegistered: false,
+        isModified: true,
+        message: 'Content has been modified since registration',
+        originalHash: request.originalHash,
+        currentHash: contentHash
+      };
     }
 
     return {
       isRegistered: false,
-      message: 'Content not found on blockchain'
+      message: 'Content not found on blockchain - not yet registered or registration pending'
     };
   } catch (error) {
     console.error('Verification failed:', error);
