@@ -801,6 +801,113 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function connectWalletInPage() {
   console.log('TruthChain: Attempting wallet connection in page context');
   
+  // Use window.postMessage to communicate with injected script
+  return new Promise((resolve, reject) => {
+    // Listen for response from injected script
+    const messageListener = (event: MessageEvent) => {
+      if (event.source === window && event.data.type === 'TRUTHCHAIN_WALLET_RESPONSE') {
+        window.removeEventListener('message', messageListener);
+        if (event.data.success) {
+          resolve(event.data);
+        } else {
+          reject(new Error(event.data.error));
+        }
+      }
+    };
+    
+    window.addEventListener('message', messageListener);
+    
+    // Inject wallet connection script into page
+    const script = document.createElement('script');
+    script.textContent = `
+      (async function() {
+        try {
+          console.log('TruthChain: Injected script running...');
+          
+          // Try Xverse first
+          if (window.XverseProviders?.StacksProvider) {
+            console.log('TruthChain: Found Xverse provider');
+            const provider = window.XverseProviders.StacksProvider;
+            
+            const accounts = await provider.request('stx_requestAccounts');
+            console.log('TruthChain: Xverse accounts:', accounts);
+            
+            if (accounts && accounts.length > 0) {
+              const addressInfo = await provider.request('stx_getAddresses');
+              console.log('TruthChain: Xverse addresses:', addressInfo);
+              
+              if (addressInfo?.addresses?.length) {
+                window.postMessage({
+                  type: 'TRUTHCHAIN_WALLET_RESPONSE',
+                  success: true,
+                  walletData: {
+                    address: addressInfo.addresses[0].address,
+                    publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
+                    provider: 'xverse',
+                    walletName: 'Xverse',
+                    isConnected: true
+                  }
+                }, '*');
+                return;
+              }
+            }
+          }
+          
+          // Try Leather
+          if (window.LeatherProvider) {
+            console.log('TruthChain: Found Leather provider');
+            const provider = window.LeatherProvider;
+            
+            const result = await provider.request('stx_requestAccounts');
+            console.log('TruthChain: Leather result:', result);
+            
+            if (result) {
+              let address = result;
+              if (result.addresses && Array.isArray(result.addresses)) {
+                address = result.addresses[0];
+              } else if (result.address) {
+                address = result.address;
+              }
+              
+              window.postMessage({
+                type: 'TRUTHCHAIN_WALLET_RESPONSE',
+                success: true,
+                walletData: {
+                  address: address,
+                  publicKey: result.publicKey || 'leather-key',
+                  provider: 'leather',
+                  walletName: 'Leather',
+                  isConnected: true
+                }
+              }, '*');
+              return;
+            }
+          }
+          
+          throw new Error('No Stacks wallet found');
+          
+        } catch (error) {
+          console.error('TruthChain: Wallet connection failed:', error);
+          window.postMessage({
+            type: 'TRUTHCHAIN_WALLET_RESPONSE',
+            success: false,
+            error: error.message
+          }, '*');
+        }
+      })();
+    `;
+    
+    document.head.appendChild(script);
+    document.head.removeChild(script);
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      window.removeEventListener('message', messageListener);
+      reject(new Error('Wallet connection timeout'));
+    }, 10000);
+  });
+
+  // Original code kept as fallback
   // Try Xverse first
   if ((window as any).XverseProviders?.StacksProvider) {
     try {

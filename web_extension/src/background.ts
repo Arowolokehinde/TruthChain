@@ -141,22 +141,32 @@ async function handleXverseConnection(): Promise<WalletData> {
       console.log('Content script approach failed:', contentScriptError);
     }
     
-    // Final fallback: direct injection
+    // Final fallback: inject into MAIN world to access Xverse
     try {
-      console.log('TruthChain: Final attempt - direct script injection with longer wait...');
+      console.log('TruthChain: Final attempt - injecting into MAIN world...');
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN', // This is key - injects into webpage context
+        function: injectWalletConnector
+      });
+      
+      // Wait for the injected script to complete
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check if connection succeeded
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        function: detectAndConnectWalletWithDelay
+        function: checkWalletConnection
       });
 
       const walletData = results[0].result;
-      if (walletData) {
-        await chrome.storage.local.set({ walletData });
-        console.log('TruthChain: Direct injection successful!');
-        return walletData;
+      if (walletData && walletData.success) {
+        await chrome.storage.local.set({ walletData: walletData.data });
+        console.log('TruthChain: MAIN world injection successful!');
+        return walletData.data;
       }
     } catch (injectionError) {
-      console.log('Script injection failed:', injectionError);
+      console.log('MAIN world injection failed:', injectionError);
     }
     
     // If all methods fail
@@ -173,6 +183,99 @@ async function handleXverseConnection(): Promise<WalletData> {
     console.error('Wallet connection error:', error);
     throw error;
   }
+}
+
+// MAIN world injection functions for direct Xverse access
+function injectWalletConnector() {
+  console.log('TruthChain: Injecting wallet connector into MAIN world...');
+  
+  // Create a unique global variable to store connection result
+  (window as any).__truthchain_wallet_result = null;
+  
+  // Function to attempt wallet connection
+  async function connectWallet() {
+    try {
+      console.log('TruthChain: Checking for Xverse in MAIN world...');
+      
+      // Check if Xverse is available
+      if ((window as any).XverseProviders?.StacksProvider) {
+        console.log('TruthChain: Found Xverse, attempting connection...');
+        const provider = (window as any).XverseProviders.StacksProvider;
+        
+        const accounts = await provider.request('stx_requestAccounts');
+        console.log('TruthChain: Got accounts:', accounts);
+        
+        if (accounts && accounts.length > 0) {
+          const addressInfo = await provider.request('stx_getAddresses');
+          console.log('TruthChain: Got address info:', addressInfo);
+          
+          if (addressInfo?.addresses?.length) {
+            (window as any).__truthchain_wallet_result = {
+              success: true,
+              data: {
+                address: addressInfo.addresses[0].address,
+                publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
+                provider: 'xverse',
+                walletName: 'Xverse',
+                isConnected: true
+              }
+            };
+            return;
+          }
+        }
+      }
+      
+      // Check for Leather
+      if ((window as any).LeatherProvider) {
+        console.log('TruthChain: Found Leather, attempting connection...');
+        const provider = (window as any).LeatherProvider;
+        
+        const result = await provider.request('stx_requestAccounts');
+        console.log('TruthChain: Leather result:', result);
+        
+        if (result) {
+          let address = result;
+          if (result.addresses && Array.isArray(result.addresses)) {
+            address = result.addresses[0];
+          } else if (result.address) {
+            address = result.address;
+          }
+          
+          (window as any).__truthchain_wallet_result = {
+            success: true,
+            data: {
+              address: address,
+              publicKey: result.publicKey || 'leather-key',
+              provider: 'leather',
+              walletName: 'Leather',
+              isConnected: true
+            }
+          };
+          return;
+        }
+      }
+      
+      (window as any).__truthchain_wallet_result = {
+        success: false,
+        error: 'No Stacks wallet found or connection failed'
+      };
+      
+    } catch (error) {
+      console.error('TruthChain: MAIN world connection failed:', error);
+      (window as any).__truthchain_wallet_result = {
+        success: false,
+        error: error.message || 'Connection failed'
+      };
+    }
+  }
+  
+  // Wait a bit for wallets to inject, then try connection
+  setTimeout(connectWallet, 2000);
+}
+
+function checkWalletConnection() {
+  // Return the result stored by the injected script
+  return (window as any).__truthchain_wallet_result;
 }
 
 // Wallet detection with longer delay for Xverse injection
