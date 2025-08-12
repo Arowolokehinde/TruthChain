@@ -3,7 +3,7 @@
 import { storeToIPFS } from './lib/ipfs';
 import { anchorToStacks, verifyOnStacks } from './lib/stacks';
 
-console.log('Blog2Block background script loaded');
+console.log('TruthChain background script loaded');
 
 interface ContentData {
   title: string;
@@ -19,7 +19,7 @@ interface WalletData {
   publicKey: string;
 }
 
-interface BridgeResult {
+interface RegistrationResult {
   cid: string;
   txId: string;
   timestamp: string;
@@ -27,7 +27,7 @@ interface BridgeResult {
 
 // Handle extension installation
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Blog2Block extension installed');
+  console.log('TruthChain extension installed');
 });
 
 // Handle messages from popup and content scripts

@@ -1,10 +1,18 @@
 // @ts-nocheck
 
-console.log('Blog2Block content script loaded on:', window.location.hostname);
+console.log('TruthChain content script loaded on:', window.location.hostname);
 
-// Inject Web3 bridge UI
-function injectBridgeUI(): void {
-  if (document.getElementById('blog2block-ui')) {
+// Inject TruthChain verification UI
+function injectTruthChainUI(): void {
+  if (document.getElementById('truthchain-ui')) {
+    return;
+  }
+
+  const hostname = window.location.hostname;
+  
+  // Twitter-specific UI injection
+  if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+    injectTwitterUI();
     return;
   }
 
@@ -13,7 +21,7 @@ function injectBridgeUI(): void {
 
   // Create container for UI elements
   const uiContainer = document.createElement('div');
-  uiContainer.id = 'blog2block-ui';
+  uiContainer.id = 'truthchain-ui';
   uiContainer.style.cssText = `
     position: fixed;
     top: 20px;
@@ -25,13 +33,13 @@ function injectBridgeUI(): void {
   `;
 
   // Create floating action button
-  const bridgeButton = createFloatingButton('🌉', 'Register Content', 0);
-  bridgeButton.addEventListener('click', async () => {
+  const registerButton = createFloatingButton('🛡️', 'Register Content', 0);
+  registerButton.addEventListener('click', async () => {
     const content = await ContentDetector.extractContent();
     chrome.runtime.sendMessage({ 
-      action: 'bridgeToWeb3', 
+      action: 'registerContent', 
       contentData: content 
-    }, handleBridgeResponse);
+    }, handleRegistrationResponse);
   });
 
   // Create verify button
@@ -39,14 +47,217 @@ function injectBridgeUI(): void {
   verifyButton.addEventListener('click', async () => {
     const content = await ContentDetector.extractContent();
     chrome.runtime.sendMessage({ 
-      action: 'verifyOnChain', 
+      action: 'verifyContent', 
       contentData: content 
-    }, handleVerifyResponse);
+    }, handleVerificationResponse);
   });
 
-  uiContainer.appendChild(bridgeButton);
+  uiContainer.appendChild(registerButton);
   uiContainer.appendChild(verifyButton);
   document.body.appendChild(uiContainer);
+}
+
+// Twitter-specific UI integration
+function injectTwitterUI() {
+  // Auto-check tweets for verification
+  checkTwitterVerification();
+  
+  // Inject verification buttons into tweet composer
+  injectTweetComposerButton();
+  
+  // Add verification badges to verified tweets
+  addVerificationBadgesToTweets();
+  
+  // Monitor for new tweets and threads
+  observeTwitterChanges();
+}
+
+function injectTweetComposerButton() {
+  const checkForComposer = () => {
+    const composer = document.querySelector('[data-testid="tweetTextarea_0"]');
+    const toolbar = document.querySelector('[data-testid="toolBar"]');
+    
+    if (composer && toolbar && !document.getElementById('truthchain-composer-btn')) {
+      const verifyBtn = document.createElement('div');
+      verifyBtn.id = 'truthchain-composer-btn';
+      verifyBtn.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        color: white;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-left: 8px;
+        transition: all 0.2s;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+      `;
+      
+      verifyBtn.innerHTML = `
+        <span style="margin-right: 6px;">🛡️</span>
+        <span>Register Tweet</span>
+      `;
+      
+      verifyBtn.addEventListener('click', async () => {
+        const content = await ContentDetector.extractContent();
+        if (content.isComposing && content.content.trim()) {
+          chrome.runtime.sendMessage({ 
+            action: 'registerContent', 
+            contentData: content 
+          }, (response) => {
+            if (response.success) {
+              verifyBtn.innerHTML = `<span style="margin-right: 6px;">✅</span><span>Registered!</span>`;
+              verifyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+              setTimeout(() => {
+                verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>Register Tweet</span>`;
+                verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
+              }, 3000);
+            }
+          });
+        } else {
+          alert('Please write your tweet first!');
+        }
+      });
+      
+      // Add hover effect
+      verifyBtn.addEventListener('mouseenter', () => {
+        verifyBtn.style.transform = 'scale(1.05)';
+        verifyBtn.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
+      });
+      
+      verifyBtn.addEventListener('mouseleave', () => {
+        verifyBtn.style.transform = 'scale(1)';
+        verifyBtn.style.boxShadow = 'none';
+      });
+      
+      toolbar.appendChild(verifyBtn);
+    }
+  };
+  
+  // Check immediately and on navigation
+  checkForComposer();
+  setInterval(checkForComposer, 1000);
+}
+
+function addVerificationBadgesToTweets() {
+  const tweets = document.querySelectorAll('[data-testid="tweet"]:not([data-truthchain-checked])');
+  
+  tweets.forEach(async (tweet) => {
+    tweet.setAttribute('data-truthchain-checked', 'true');
+    
+    try {
+      // Extract tweet content
+      const tweetText = tweet.querySelector('[data-testid="tweetText"]')?.textContent;
+      if (!tweetText) return;
+      
+      // Quick verification check
+      const contentHash = await ContentDetector.generateContentHash({
+        title: 'Tweet',
+        content: tweetText,
+        type: 'tweet'
+      });
+      
+      chrome.runtime.sendMessage({ 
+        action: 'verifyContent', 
+        contentData: { hash: contentHash },
+        silent: true 
+      }, (response) => {
+        if (response?.success && response.data?.isRegistered) {
+          addVerificationBadgeToTweet(tweet, response.data);
+        }
+      });
+    } catch (error) {
+      console.log('Tweet verification check failed:', error);
+    }
+  });
+}
+
+function addVerificationBadgeToTweet(tweetElement, verificationData) {
+  const actionsBar = tweetElement.querySelector('[role="group"]');
+  if (!actionsBar || tweetElement.querySelector('.truthchain-badge')) return;
+  
+  const badge = document.createElement('div');
+  badge.className = 'truthchain-badge';
+  badge.style.cssText = `
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+    cursor: pointer;
+    animation: fadeIn 0.3s ease-out;
+  `;
+  
+  badge.innerHTML = `
+    <span style="margin-right: 4px;">🛡️</span>
+    <span>Verified</span>
+  `;
+  
+  badge.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showVerificationDetails(verificationData);
+  });
+  
+  actionsBar.appendChild(badge);
+}
+
+function checkTwitterVerification() {
+  // Auto-verify current tweet/thread
+  setTimeout(async () => {
+    try {
+      const content = await ContentDetector.extractContent();
+      if (content.type === 'tweet' || content.type === 'thread') {
+        chrome.runtime.sendMessage({ 
+          action: 'verifyContent', 
+          contentData: content, 
+          silent: true 
+        }, (response) => {
+          if (response?.success && response.data?.isRegistered) {
+            injectVerificationBadge(response.data);
+          }
+        });
+      }
+    } catch (error) {
+      console.log('Auto-verification failed:', error);
+    }
+  }, 1000);
+}
+
+function observeTwitterChanges() {
+  const observer = new MutationObserver((mutations) => {
+    let shouldCheck = false;
+    
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === 1 && (
+            node.querySelector?.('[data-testid="tweet"]') ||
+            node.getAttribute?.('data-testid') === 'tweet'
+          )) {
+            shouldCheck = true;
+          }
+        });
+      }
+    });
+    
+    if (shouldCheck) {
+      setTimeout(() => {
+        addVerificationBadgesToTweets();
+        injectTweetComposerButton();
+      }, 500);
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
 }
 
 // Auto-verification on page load
@@ -54,7 +265,7 @@ async function checkContentVerification() {
   try {
     const content = await ContentDetector.extractContent();
     chrome.runtime.sendMessage({ 
-      action: 'verifyOnChain', 
+      action: 'verifyContent', 
       contentData: content, 
       silent: true 
     }, (response) => {
@@ -192,22 +403,22 @@ function createFloatingButton(icon: string, title: string, topOffset: number): H
   return button;
 }
 
-function handleBridgeResponse(response: any): void {
+function handleRegistrationResponse(response: any): void {
   if (response && response.success) {
     showNotification(
-      `✅ Content bridged to Web3!\nIPFS: ${response.data.cid.slice(0, 20)}...\nTX: ${response.data.txId.slice(0, 10)}...`,
+      `✅ Content registered on TruthChain!\nIPFS: ${response.data.cid.slice(0, 20)}...\nTX: ${response.data.txId.slice(0, 10)}...`,
       'success'
     );
   } else {
-    showNotification('❌ Bridge failed: ' + (response?.error || 'Unknown error'), 'error');
+    showNotification('❌ Registration failed: ' + (response?.error || 'Unknown error'), 'error');
   }
 }
 
-function handleVerifyResponse(response: any): void {
+function handleVerificationResponse(response: any): void {
   if (response && response.success) {
     const message = response.data.isRegistered 
-      ? `✅ Content verified on blockchain!\nOwner: ${response.data.owner.slice(0, 12)}...\nTimestamp: ${new Date(response.data.timestamp).toLocaleDateString()}`
-      : '❌ Content not found on blockchain';
+      ? `✅ Content verified on TruthChain!\nOwner: ${response.data.owner.slice(0, 12)}...\nTimestamp: ${new Date(response.data.timestamp).toLocaleDateString()}`
+      : '❌ Content not found on TruthChain';
     showNotification(message, response.data.isRegistered ? 'success' : 'warning');
   } else {
     showNotification('❌ Verification failed: ' + (response?.error || 'Unknown error'), 'error');
@@ -216,7 +427,7 @@ function handleVerifyResponse(response: any): void {
 
 function showNotification(message: string, type: 'success' | 'error' | 'warning' = 'info'): void {
   // Remove existing notification
-  const existing = document.getElementById('blog2block-notification');
+  const existing = document.getElementById('truthchain-notification');
   if (existing) {
     existing.remove();
   }
@@ -229,7 +440,7 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
   };
 
   const notification = document.createElement('div');
-  notification.id = 'blog2block-notification';
+  notification.id = 'truthchain-notification';
   notification.style.cssText = `
     position: fixed;
     top: 130px;
@@ -278,15 +489,15 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
 
 // Initialize when page loads
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectBridgeUI);
+  document.addEventListener('DOMContentLoaded', injectTruthChainUI);
 } else {
-  injectBridgeUI();
+  injectTruthChainUI();
 }
 
 // Handle dynamic content changes
 const observer = new MutationObserver(() => {
-  if (!document.getElementById('blog2block-ui')) {
-    setTimeout(injectBridgeUI, 1000);
+  if (!document.getElementById('truthchain-ui')) {
+    setTimeout(injectTruthChainUI, 1000);
   }
 });
 
@@ -302,7 +513,9 @@ class ContentDetector {
     let content = null;
 
     // Platform-specific extraction
-    if (hostname.includes('medium.com')) {
+    if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+      content = this.extractTwitterContent();
+    } else if (hostname.includes('medium.com')) {
       content = this.extractMediumContent();
     } else if (hostname.includes('dev.to')) {
       content = this.extractDevToContent();
@@ -380,6 +593,109 @@ class ContentDetector {
       content: document.body.innerText.slice(0, 1000),
       type: 'repository'
     };
+  }
+
+  static extractTwitterContent() {
+    // Detect tweet composition area
+    const tweetComposer = document.querySelector('[data-testid="tweetTextarea_0"]') || 
+                         document.querySelector('[contenteditable="true"][data-text="What is happening?!"]');
+    
+    if (tweetComposer) {
+      return {
+        title: 'New Tweet',
+        content: tweetComposer.textContent || '',
+        type: 'tweet-draft',
+        isComposing: true,
+        author: this.getTwitterUsername(),
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // Extract existing tweet
+    const tweetContainer = document.querySelector('[data-testid="tweet"]') || 
+                          document.querySelector('article[role="article"]');
+    
+    if (tweetContainer) {
+      const tweetText = tweetContainer.querySelector('[data-testid="tweetText"]')?.textContent ||
+                       tweetContainer.querySelector('[lang]')?.textContent || '';
+      
+      const username = tweetContainer.querySelector('[data-testid="User-Names"] a')?.textContent ||
+                      this.getTwitterUsername();
+      
+      const timestamp = tweetContainer.querySelector('time')?.getAttribute('datetime') ||
+                       new Date().toISOString();
+      
+      const isRetweet = tweetContainer.querySelector('[data-testid="socialContext"]')?.textContent.includes('retweeted');
+      const isReply = tweetContainer.querySelector('[data-testid="reply"]') !== null;
+      
+      return {
+        title: `Tweet by ${username}`,
+        content: tweetText,
+        type: isRetweet ? 'retweet' : isReply ? 'reply' : 'tweet',
+        author: username,
+        timestamp,
+        url: window.location.href,
+        engagement: this.getTwitterEngagement(tweetContainer)
+      };
+    }
+    
+    // Extract Twitter thread
+    const threadTweets = document.querySelectorAll('[data-testid="tweet"]');
+    if (threadTweets.length > 1) {
+      const threadContent = Array.from(threadTweets)
+        .map(tweet => tweet.querySelector('[data-testid="tweetText"]')?.textContent)
+        .filter(Boolean)
+        .join('\n\n');
+      
+      return {
+        title: `Twitter Thread by ${this.getTwitterUsername()}`,
+        content: threadContent,
+        type: 'thread',
+        author: this.getTwitterUsername(),
+        tweetCount: threadTweets.length,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    return this.extractGenericContent();
+  }
+
+  static getTwitterUsername() {
+    // Try multiple selectors for username
+    const selectors = [
+      '[data-testid="UserName"] [dir="ltr"]',
+      '[data-testid="User-Names"] a[role="link"]',
+      'a[href^="/"][role="link"] span',
+      '[data-testid="primaryColumn"] h1'
+    ];
+    
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element?.textContent?.startsWith('@')) {
+        return element.textContent;
+      }
+    }
+    
+    // Fallback to URL extraction
+    const match = window.location.pathname.match(/^\/([^\/]+)/);
+    return match ? `@${match[1]}` : '@unknown';
+  }
+
+  static getTwitterEngagement(tweetContainer) {
+    const metrics = {};
+    
+    // Extract engagement metrics
+    const replyCount = tweetContainer.querySelector('[data-testid="reply"] span')?.textContent;
+    const retweetCount = tweetContainer.querySelector('[data-testid="retweet"] span')?.textContent;
+    const likeCount = tweetContainer.querySelector('[data-testid="like"] span')?.textContent;
+    const viewCount = tweetContainer.querySelector('[href$="/analytics"]')?.textContent;
+    
+    if (replyCount && replyCount !== '0') metrics.replies = parseInt(replyCount.replace(/[,K]/g, '')) || 0;
+    if (retweetCount && retweetCount !== '0') metrics.retweets = parseInt(retweetCount.replace(/[,K]/g, '')) || 0;
+    if (likeCount && likeCount !== '0') metrics.likes = parseInt(likeCount.replace(/[,K]/g, '')) || 0;
+    if (viewCount) metrics.views = parseInt(viewCount.replace(/[,K]/g, '')) || 0;
+    
+    return metrics;
   }
 
   static extractGenericContent() {
