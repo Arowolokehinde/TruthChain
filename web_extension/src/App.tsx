@@ -113,15 +113,15 @@ const App = () => {
     });
   };
 
-  const bridgeContentToWeb3 = () => {
-    setContent(prev => ({ ...prev, isProcessing: true, lastAction: 'bridging' }));
+  const registerContentOnTruthChain = () => {
+    setContent(prev => ({ ...prev, isProcessing: true, lastAction: 'registering' }));
     
     // @ts-ignore
-    chrome.runtime.sendMessage({ action: 'bridgeToWeb3' }, (response: any) => {
+    chrome.runtime.sendMessage({ action: 'registerContent' }, (response: any) => {
       if (response.success) {
         setContent({
           isProcessing: false,
-          lastAction: 'bridged',
+          lastAction: 'registered',
           contentCID: response.data.cid,
           txId: response.data.txId,
           error: null,
@@ -138,17 +138,17 @@ const App = () => {
     });
   };
 
-  const verifyContentOnChain = () => {
+  const verifyContentOnTruthChain = () => {
     setContent(prev => ({ ...prev, isProcessing: true, lastAction: 'verifying' }));
     
     // @ts-ignore
-    chrome.runtime.sendMessage({ action: 'verifyOnChain' }, (response: any) => {
+    chrome.runtime.sendMessage({ action: 'verifyContent' }, (response: any) => {
       setContent(prev => ({ ...prev, isProcessing: false }));
       
       if (response.success) {
         const message = response.data.isRegistered 
-          ? `✅ Content verified on blockchain!\nOwner: ${response.data.owner}\nTimestamp: ${response.data.timestamp}` 
-          : '❌ Content not found on blockchain';
+          ? `✅ Content verified on TruthChain!\nOwner: ${response.data.owner}\nTimestamp: ${response.data.timestamp}` 
+          : '❌ Content not found on TruthChain';
         alert(message);
       } else {
         alert('❌ Verification failed: ' + response.error);
@@ -168,7 +168,7 @@ const App = () => {
             `${index + 1}. CID: ${item.cid}\n   Date: ${item.timestamp}`
           ).join('\n\n');
           
-          alert(`📚 Your Web3 Content:\n\n${contentList || 'No content found'}`);
+          alert(`📚 Your TruthChain Content:\n\n${contentList || 'No content found'}`);
         } else {
           alert('❌ Failed to fetch content: ' + response.error);
         }
@@ -328,28 +328,28 @@ const App = () => {
                 </div>
               </div>
               
-              {/* Bridge Content Button */}
+              {/* Register Content Button */}
               <button
-                onClick={bridgeContentToWeb3}
+                onClick={registerContentOnTruthChain}
                 disabled={content.isProcessing}
                 className='w-full bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 text-white py-4 px-5 rounded-xl font-semibold hover:from-teal-700 hover:via-cyan-700 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 border border-teal-500/20 group'
               >
                 <div className='flex items-center'>
                   <div className='w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mr-4 group-hover:scale-105 transition-transform duration-200'>
-                    {content.isProcessing && content.lastAction === 'bridging' ? (
+                    {content.isProcessing && content.lastAction === 'registering' ? (
                       <div className='animate-spin rounded-full h-5 w-5 border-2 border-white/50 border-t-white'></div>
                     ) : (
                       <svg className='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10' />
+                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' />
                       </svg>
                     )}
                   </div>
                   <div className='text-left flex-1'>
                     <div className='font-bold text-sm'>
-                      {content.isProcessing && content.lastAction === 'bridging' ? 'Processing Bridge...' : 'Bridge to Web3'}
+                      {content.isProcessing && content.lastAction === 'registering' ? 'Registering Content...' : 'Register Content'}
                     </div>
                     <div className='text-xs text-teal-100 font-medium opacity-90'>
-                      Store content on IPFS + Stacks blockchain
+                      Store content on IPFS + TruthChain blockchain
                     </div>
                   </div>
                   <svg className='w-4 h-4 text-white/80 group-hover:translate-x-1 transition-transform duration-200' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -360,7 +360,7 @@ const App = () => {
               
               {/* Verify Content Button */}
               <button
-                onClick={verifyContentOnChain}
+                onClick={verifyContentOnTruthChain}
                 disabled={content.isProcessing}
                 className='w-full bg-gradient-to-r from-slate-600 via-teal-600 to-slate-600 text-white py-4 px-5 rounded-xl font-semibold hover:from-slate-700 hover:via-teal-700 hover:to-slate-700 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 border border-slate-500/20 group'
               >
@@ -379,7 +379,7 @@ const App = () => {
                       {content.isProcessing && content.lastAction === 'verifying' ? 'Verifying Content...' : 'Verify Authenticity'}
                     </div>
                     <div className='text-xs text-slate-100 font-medium opacity-90'>
-                      Check blockchain ownership proof
+                      Check TruthChain ownership proof
                     </div>
                   </div>
                   <svg className='w-4 h-4 text-white/80 group-hover:translate-x-1 transition-transform duration-200' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -420,7 +420,7 @@ const App = () => {
                           <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
                         </svg>
                       </div>
-                      <span className='text-sm font-semibold text-teal-800'>Content Successfully Bridged</span>
+                      <span className='text-sm font-semibold text-teal-800'>Content Successfully Registered</span>
                       {content.lastUpdate && (
                         <span className='text-xs text-teal-600 ml-auto'>{content.lastUpdate}</span>
                       )}
@@ -481,9 +481,9 @@ const App = () => {
                 <div className='w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-lg opacity-60'></div>
               </div>
               <div className='space-y-2'>
-                <h3 className='text-base font-bold text-slate-700'>TruthChain Web3 Ready</h3>
+                <h3 className='text-base font-bold text-slate-700'>TruthChain Ready</h3>
                 <p className='text-slate-500 text-sm leading-relaxed max-w-sm mx-auto'>
-                  Secure your digital content with institutional-grade blockchain technology. Connect your wallet to begin.
+                  Secure your digital content with blockchain-powered authenticity. Connect your wallet to begin.
                 </p>
               </div>
               <div className='flex items-center justify-center space-x-6 pt-2'>
@@ -493,7 +493,7 @@ const App = () => {
                 </div>
                 <div className='flex items-center space-x-1.5 text-xs text-slate-400'>
                   <div className='w-2 h-2 bg-cyan-400 rounded-full'></div>
-                  <span>Stacks</span>
+                  <span>TruthChain</span>
                 </div>
                 <div className='flex items-center space-x-1.5 text-xs text-slate-400'>
                   <div className='w-2 h-2 bg-emerald-400 rounded-full'></div>
@@ -512,9 +512,9 @@ const App = () => {
               <span className='font-medium'>TruthChain</span>
             </div>
             <div className='flex items-center space-x-1'>
-              <span>v2.1.0</span>
+              <span>v1.0.0</span>
               <span className='w-1 h-1 bg-slate-400 rounded-full'></span>
-              <span>Blockchain</span>
+              <span>Stacks</span>
             </div>
           </div>
         </div>

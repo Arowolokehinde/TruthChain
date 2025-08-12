@@ -41,14 +41,14 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
-    case 'bridgeToWeb3':
-      handleContentBridge(request)
+    case 'registerContent':
+      handleContentRegistration(request)
         .then(result => sendResponse({ success: true, data: result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
-    case 'verifyOnChain':
-      handleChainVerification(request)
+    case 'verifyContent':
+      handleContentVerification(request)
         .then(result => sendResponse({ success: true, data: result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -67,7 +67,7 @@ chrome.commands.onCommand.addListener((command: string) => {
   
   switch (command) {
     case 'bridge-content':
-      executeBridgeCommand();
+      executeRegistrationCommand();
       break;
     case 'verify-content':
       executeVerifyCommand();
@@ -326,7 +326,7 @@ function detectAndConnectWallet() {
   });
 }
 
-async function handleContentBridge(request?: any): Promise<BridgeResult> {
+async function handleContentRegistration(request?: any): Promise<RegistrationResult> {
   try {
     let content;
     
@@ -346,7 +346,7 @@ async function handleContentBridge(request?: any): Promise<BridgeResult> {
     }
     
     if (!content) {
-      throw new Error('No content found to bridge');
+      throw new Error('No content found to register');
     }
 
     // Get wallet data
@@ -396,17 +396,17 @@ async function handleContentBridge(request?: any): Promise<BridgeResult> {
       registrationStatus = 'simulated';
     }
     
-    const bridgeResult: BridgeResult = {
+    const registrationResult: RegistrationResult = {
       cid,
       txId,
       timestamp: processedContent.registrationTimestamp
     };
 
-    // Store comprehensive bridge record
+    // Store comprehensive registration record
     const contentHash = processedContent.contentHash;
     await chrome.storage.local.set({
-      [`bridge_${contentHash}`]: {
-        ...bridgeResult,
+      [`truthchain_${contentHash}`]: {
+        ...registrationResult,
         content: processedContent,
         walletAddress: storage.walletData.address,
         registrationStatus,
@@ -426,7 +426,7 @@ async function handleContentBridge(request?: any): Promise<BridgeResult> {
       cid,
       txId,
       title: content.title,
-      timestamp: bridgeResult.timestamp,
+      timestamp: registrationResult.timestamp,
       url: content.url,
       type: content.type,
       status: registrationStatus
@@ -442,14 +442,14 @@ async function handleContentBridge(request?: any): Promise<BridgeResult> {
       message: `"${content.title}" ${registrationStatus === 'confirmed' ? 'successfully registered' : 'simulated registration'} on blockchain`
     });
 
-    return bridgeResult;
+    return registrationResult;
   } catch (error) {
-    console.error('Bridge failed:', error);
+    console.error('Registration failed:', error);
     throw error;
   }
 }
 
-async function handleChainVerification(request?: any): Promise<any> {
+async function handleContentVerification(request?: any): Promise<any> {
   try {
     let content;
     const isSilent = request?.silent;
@@ -471,20 +471,20 @@ async function handleChainVerification(request?: any): Promise<any> {
     const contentHash = content.hash || await generateContentHash(content);
     
     // Check local storage first (fastest)
-    const stored = await chrome.storage.local.get(`bridge_${contentHash}`);
-    const bridgeRecord = stored[`bridge_${contentHash}`];
+    const stored = await chrome.storage.local.get(`truthchain_${contentHash}`);
+    const registrationRecord = stored[`truthchain_${contentHash}`];
     
-    if (bridgeRecord) {
+    if (registrationRecord) {
       const result = {
         isRegistered: true,
-        owner: bridgeRecord.walletAddress,
-        timestamp: bridgeRecord.timestamp,
-        cid: bridgeRecord.cid,
-        txId: bridgeRecord.txId,
-        status: bridgeRecord.registrationStatus || 'confirmed',
-        platform: bridgeRecord.platform,
-        author: bridgeRecord.author,
-        contentType: bridgeRecord.contentType,
+        owner: registrationRecord.walletAddress,
+        timestamp: registrationRecord.timestamp,
+        cid: registrationRecord.cid,
+        txId: registrationRecord.txId,
+        status: registrationRecord.registrationStatus || 'confirmed',
+        platform: registrationRecord.platform,
+        author: registrationRecord.author,
+        contentType: registrationRecord.contentType,
         source: 'local'
       };
       
@@ -534,7 +534,7 @@ async function handleChainVerification(request?: any): Promise<any> {
 
     return {
       isRegistered: false,
-      message: 'Content not found on blockchain - not yet registered or registration pending'
+      message: 'Content not found on TruthChain - not yet registered or registration pending'
     };
   } catch (error) {
     console.error('Verification failed:', error);
@@ -544,12 +544,12 @@ async function handleChainVerification(request?: any): Promise<any> {
 
 async function handleGetUserContent(address: string): Promise<any[]> {
   try {
-    // Get all stored bridge records for this address
+    // Get all stored registration records for this address
     const allData = await chrome.storage.local.get(null);
     const userContent = [];
 
     for (const [key, value] of Object.entries(allData)) {
-      if (key.startsWith('bridge_') && value.walletAddress === address) {
+      if (key.startsWith('truthchain_') && value.walletAddress === address) {
         userContent.push({
           cid: value.cid,
           title: value.content.title,
@@ -671,19 +671,19 @@ async function generateContentHash(content: ContentData): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function executeBridgeCommand(): Promise<void> {
+async function executeRegistrationCommand(): Promise<void> {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
     await chrome.scripting.executeScript({
       target: { tabId: tab.id! },
       function: () => {
-        // Trigger bridge from content script
-        chrome.runtime.sendMessage({ action: 'bridgeToWeb3' });
+        // Trigger registration from content script
+        chrome.runtime.sendMessage({ action: 'registerContent' });
       }
     });
   } catch (error) {
-    console.error('Failed to execute bridge command:', error);
+    console.error('Failed to execute registration command:', error);
   }
 }
 
@@ -695,7 +695,7 @@ async function executeVerifyCommand(): Promise<void> {
       target: { tabId: tab.id! },
       function: () => {
         // Trigger verification from content script
-        chrome.runtime.sendMessage({ action: 'verifyOnChain' });
+        chrome.runtime.sendMessage({ action: 'verifyContent' });
       }
     });
   } catch (error) {
