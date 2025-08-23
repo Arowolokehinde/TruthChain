@@ -75,7 +75,7 @@
   },
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stacks.co https://*.hiro.so https://*.web3.storage https://*.ipfs.io;",
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.stacks.co https://*.hiro.so https://*.web3.storage https://*.ipfs.io https://api.testnet.hiro.so https://stacks-node-api.testnet.stacks.co https://api.mainnet.hiro.so https://stacks-node-api.mainnet.stacks.co;",
     "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
   },
   
