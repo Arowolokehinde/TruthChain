@@ -46,10 +46,10 @@ const App = () => {
     });
   }, []);
 
-  const connectXverseWallet = async () => {
+  const connectStacksWallet = async () => {
     setIsLoading(true);
     try {
-      console.log('Attempting to connect Stacks wallet...');
+      console.log('TruthChain: Attempting to connect Stacks wallet...');
       
       // @ts-ignore
       chrome.runtime.sendMessage(
@@ -64,44 +64,53 @@ const App = () => {
               publicKey: response.walletData.publicKey
             });
             
-            const walletName = response.walletData.walletName || 'Wallet';
+            const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
+            const network = response.walletData.network || 'testnet';
             
             alert(
-              `🎉 ${walletName} Connected!\n\n` +
-              `📍 Address: ${response.walletData.address.slice(0, 8)}...${response.walletData.address.slice(-6)}\n\n` +
-              `✅ Ready for real blockchain transactions`
+              `🎉 ${walletName} Connected Successfully!\n\n` +
+              `📍 Address: ${response.walletData.address.slice(0, 12)}...${response.walletData.address.slice(-8)}\n` +
+              `🌐 Network: ${network.charAt(0).toUpperCase() + network.slice(1)}\n` +
+              `🔗 Provider: ${response.walletData.provider}\n\n` +
+              `✅ Ready for TruthChain operations!`
             );
           } else {
             console.error('Wallet connection failed:', response?.error);
             
             const errorMsg = response?.error || 'Unknown error';
             
-            if (errorMsg.includes('No Stacks wallet') || errorMsg.includes('not detected')) {
+            if (errorMsg.includes('No Stacks wallet') || errorMsg.includes('not detected') || errorMsg.includes('not found')) {
               alert(
                 '🔗 Stacks Wallet Required\n\n' +
-                'Please install a Stacks wallet:\n\n' +
+                'TruthChain supports these Stacks wallets:\n\n' +
                 '🥇 Xverse Wallet (Recommended)\n' +
-                '   → Chrome Web Store → "Xverse Wallet"\n\n' +
-                '🥈 Leather Wallet\n' +
-                '   → Visit leather.io\n\n' +
-                'After installation:\n' +
-                '1. Set up your wallet\n' +
-                '2. Make sure it\'s unlocked\n' +
-                '3. Refresh this page\n' +
-                '4. Try connecting again'
+                '   → Chrome Web Store → Search "Xverse Wallet"\n' +
+                '   → Supports Bitcoin + Stacks\n\n' +
+                '🥈 Leather Wallet (Hiro)\n' +
+                '   → Visit leather.io or hiro.so\n' +
+                '   → Full Stacks ecosystem support\n\n' +
+                'Setup Instructions:\n' +
+                '1. Install your preferred wallet\n' +
+                '2. Create or restore your account\n' +
+                '3. Make sure the wallet is unlocked\n' +
+                '4. Refresh this extension\n' +
+                '5. Try connecting again\n\n' +
+                'Need testnet STX? Visit stacks.co/testnet-faucet'
               );
-            } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected')) {
-              alert('⚠️ Connection Cancelled\n\nYou cancelled the wallet connection. Please try again when ready.');
+            } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
+              alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
+            } else if (errorMsg.includes('timeout')) {
+              alert('⏱️ Connection Timeout\n\nWallet connection timed out.\n\nTroubleshooting:\n• Make sure your wallet is unlocked\n• Check for wallet popup windows\n• Try refreshing the page\n• Restart your wallet extension');
             } else {
-              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTry:\n• Unlock your wallet\n• Refresh the page\n• Try again`);
+              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure wallet is unlocked\n• Check wallet permissions\n• Refresh the page and try again\n• Restart browser if needed`);
             }
           }
           setIsLoading(false);
         }
       );
     } catch (error) {
-      console.error('Error connecting wallet:', error);
-      alert('⚠️ Extension Error\n\nPlease refresh the extension and try again.');
+      console.error('Wallet connection error:', error);
+      alert('⚠️ Extension Error\n\nSomething went wrong with the extension.\n\nTry:\n• Refresh this extension\n• Restart your browser\n• Check browser console for errors');
       setIsLoading(false);
     }
   };
@@ -240,25 +249,25 @@ const App = () => {
                   <div>
                     <p className='text-slate-600 text-sm font-medium mb-1'>No Wallet Connected</p>
                     <p className='text-slate-500 text-xs leading-relaxed'>
-                      Connect Xverse to access blockchain features
+                      Connect Xverse or Leather to access blockchain features
                     </p>
                   </div>
                   <button
-                    onClick={connectXverseWallet}
+                    onClick={connectStacksWallet}
                     disabled={isLoading}
                     className='w-full bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-teal-700 hover:via-cyan-700 hover:to-teal-700 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl border border-teal-500/20'
                   >
                     {isLoading ? (
                       <div className='flex items-center justify-center'>
                         <div className='animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2'></div>
-                        <span className='text-sm'>Connecting...</span>
+                        <span className='text-sm'>Detecting Wallets...</span>
                       </div>
                     ) : (
                       <div className='flex items-center justify-center'>
                         <svg className='w-4 h-4 mr-2' fill='currentColor' viewBox='0 0 20 20'>
                           <path fillRule='evenodd' d='M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z' clipRule='evenodd' />
                         </svg>
-                        <span className='text-sm'>Connect Xverse Wallet</span>
+                        <span className='text-sm'>Connect Stacks Wallet</span>
                       </div>
                     )}
                   </button>
