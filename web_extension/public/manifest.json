@@ -52,7 +52,9 @@
         "https://*.blogspot.com/*",
         "https://*.google.com/*",
         "https://*.youtube.com/*",
-        "https://*.github.com/*"
+        "https://*.github.com/*",
+        "https://*.x.com/*",
+        "https://*.twitter.com/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle",
