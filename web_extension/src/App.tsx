@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import TruthChainUsernameManager, { TruthChainUser } from './utils/username-manager'
 
 interface WalletState {
   isConnected: boolean;
   address: string | null;
   publicKey: string | null;
+  username?: string | null;
 }
 
 interface ContentState {
@@ -19,7 +21,8 @@ const App = () => {
   const [wallet, setWallet] = useState<WalletState>({
     isConnected: false,
     address: null,
-    publicKey: null
+    publicKey: null,
+    username: null
   });
   const [content, setContent] = useState<ContentState>({
     isProcessing: false,
@@ -31,17 +34,30 @@ const App = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState('');
+  const [showUsernameSetup, setShowUsernameSetup] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [currentUser, setCurrentUser] = useState<TruthChainUser | null>(null);
 
   useEffect(() => {
-    // Check if wallet is already connected
+    // Check if wallet is already connected and get username
     // @ts-ignore
-    chrome.storage.local.get(['walletData'], (result: { walletData?: any }) => {
+    chrome.storage.local.get(['walletData'], async (result: { walletData?: any }) => {
       if (result.walletData) {
         setWallet({
           isConnected: true,
           address: result.walletData.address,
-          publicKey: result.walletData.publicKey
+          publicKey: result.walletData.publicKey,
+          username: null
         });
+
+        // Check for existing username
+        const usernameManager = TruthChainUsernameManager.getInstance();
+        const user = await usernameManager.getUserByWallet(result.walletData.address);
+        if (user) {
+          setCurrentUser(user);
+          setWallet(prev => ({ ...prev, username: user.username }));
+        }
       }
     });
   }, []);
@@ -61,8 +77,20 @@ const App = () => {
             setWallet({
               isConnected: true,
               address: response.walletData.address,
-              publicKey: response.walletData.publicKey
+              publicKey: response.walletData.publicKey,
+              username: null
             });
+
+            // Check for existing username after wallet connection
+            const usernameManager = TruthChainUsernameManager.getInstance();
+            const user = await usernameManager.getUserByWallet(response.walletData.address);
+            if (user) {
+              setCurrentUser(user);
+              setWallet(prev => ({ ...prev, username: user.username }));
+            } else {
+              // Prompt for username creation
+              setShowUsernameSetup(true);
+            }
             
             const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
             const network = response.walletData.network || 'testnet';
@@ -118,8 +146,67 @@ const App = () => {
   const disconnectWallet = () => {
     // @ts-ignore
     chrome.storage.local.remove(['walletData'], () => {
-      setWallet({ isConnected: false, address: null, publicKey: null });
+      setWallet({ isConnected: false, address: null, publicKey: null, username: null });
+      setCurrentUser(null);
+      setShowUsernameSetup(false);
     });
+  };
+
+  const createUsername = async () => {
+    if (!wallet.address || !usernameInput.trim()) {
+      setUsernameError('Username is required');
+      return;
+    }
+
+    setIsLoading(true);
+    setUsernameError('');
+
+    try {
+      const usernameManager = TruthChainUsernameManager.getInstance();
+      
+      // Validate format
+      const validation = usernameManager.validateUsernameFormat(usernameInput.trim());
+      if (!validation.isValid) {
+        setUsernameError(validation.error || 'Invalid username format');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create username
+      const user = await usernameManager.createUsername(usernameInput.trim(), wallet.address);
+      
+      setCurrentUser(user);
+      setWallet(prev => ({ ...prev, username: user.username }));
+      setShowUsernameSetup(false);
+      setUsernameInput('');
+      
+      alert(`🎉 Username Created Successfully!\n\n` +
+            `👤 Username: ${user.username}\n` +
+            `🔗 Tied to: ${wallet.address.slice(0, 12)}...${wallet.address.slice(-8)}\n\n` +
+            `✅ Your TruthChain identity is now ready!`);
+    } catch (error: any) {
+      console.error('Username creation failed:', error);
+      setUsernameError(error.message || 'Failed to create username');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkUsernameAvailability = async (username: string) => {
+    if (!username.trim()) return;
+    
+    try {
+      const usernameManager = TruthChainUsernameManager.getInstance();
+      const isAvailable = await usernameManager.checkUsernameAvailability(username.trim());
+      
+      if (!isAvailable) {
+        setUsernameError('Username is already taken');
+      } else {
+        setUsernameError('');
+      }
+    } catch (error) {
+      console.error('Username availability check failed:', error);
+    }
   };
 
   const registerContentOnTruthChain = () => {
@@ -286,6 +373,38 @@ const App = () => {
                     </div>
                   </div>
                   
+                  {/* Username Display or Setup */}
+                  {currentUser ? (
+                    <div className='bg-white/80 rounded-xl p-3 border border-slate-200/60 mb-3'>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-xs font-medium text-slate-500 uppercase tracking-wide'>TruthChain Username</span>
+                        <div className='flex items-center space-x-1'>
+                          <div className='w-2 h-2 bg-green-400 rounded-full'></div>
+                          <span className='text-xs text-green-600 font-medium'>Verified</span>
+                        </div>
+                      </div>
+                      <p className='font-semibold text-sm text-teal-700 bg-teal-50 rounded-lg p-2 border border-teal-200/50'>
+                        @{currentUser.username}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='bg-yellow-50 border border-yellow-200/60 rounded-xl p-3 mb-3'>
+                      <div className='flex items-center space-x-2 mb-2'>
+                        <div className='w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center'>
+                          <span className='text-xs text-white'>!</span>
+                        </div>
+                        <span className='text-xs font-semibold text-yellow-800'>Username Required</span>
+                      </div>
+                      <p className='text-xs text-yellow-700 mb-2'>Create a unique username to use TruthChain features</p>
+                      <button
+                        onClick={() => setShowUsernameSetup(true)}
+                        className='w-full bg-yellow-200 text-yellow-800 py-2 px-3 rounded-lg text-xs font-semibold hover:bg-yellow-300 transition-colors duration-200'
+                      >
+                        Create Username
+                      </button>
+                    </div>
+                  )}
+
                   <div className='bg-white/80 rounded-xl p-3 border border-slate-200/60'>
                     <div className='flex items-center justify-between mb-2'>
                       <span className='text-xs font-medium text-slate-500 uppercase tracking-wide'>STX Address</span>
