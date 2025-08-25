@@ -97,25 +97,53 @@ function injectTweetComposerButton() {
       
       verifyBtn.innerHTML = `
         <span style="margin-right: 6px;">🛡️</span>
-        <span>Register Tweet</span>
+        <span>TruthChain</span>
       `;
       
       verifyBtn.addEventListener('click', async () => {
         const content = await ContentDetector.extractContent();
         if (content.isComposing && content.content.trim()) {
-          chrome.runtime.sendMessage({ 
-            action: 'registerContent', 
-            contentData: content 
-          }, (response) => {
-            if (response.success) {
-              verifyBtn.innerHTML = `<span style="margin-right: 6px;">✅</span><span>Registered!</span>`;
-              verifyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-              setTimeout(() => {
-                verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>Register Tweet</span>`;
-                verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
-              }, 3000);
-            }
-          });
+          // Show use case prompt
+          const shouldRegister = confirm(
+            `🛡️ TruthChain Content Registration\n\n` +
+            `Would you like to upload this tweet on-chain?\n\n` +
+            `✅ Your content will be provably yours\n` +
+            `✅ Viewers can verify your tweet's origin and integrity\n` +
+            `✅ You build lasting trust with your audience\n\n` +
+            `Click OK to register on TruthChain blockchain.`
+          );
+          
+          if (shouldRegister) {
+            verifyBtn.innerHTML = `<span style="margin-right: 6px;">⏳</span><span>Registering...</span>`;
+            verifyBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            
+            chrome.runtime.sendMessage({ 
+              action: 'registerContent', 
+              contentData: content 
+            }, (response) => {
+              if (response.success) {
+                verifyBtn.innerHTML = `<span style="margin-right: 6px;">✅</span><span>Registered!</span>`;
+                verifyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                
+                // Show success notification
+                showSuccessNotification(response.data);
+                
+                setTimeout(() => {
+                  verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>TruthChain</span>`;
+                  verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
+                }, 5000);
+              } else {
+                verifyBtn.innerHTML = `<span style="margin-right: 6px;">❌</span><span>Failed</span>`;
+                verifyBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                alert('Registration failed: ' + (response.error || 'Unknown error'));
+                
+                setTimeout(() => {
+                  verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>TruthChain</span>`;
+                  verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
+                }, 3000);
+              }
+            });
+          }
         } else {
           alert('Please write your tweet first!');
         }
@@ -201,7 +229,7 @@ function addVerificationBadgeToTweet(tweetElement, verificationData) {
   
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
-    showVerificationDetails(verificationData);
+    showVerificationDetailsWithUsername(verificationData);
   });
   
   actionsBar.appendChild(badge);
@@ -316,10 +344,73 @@ function injectVerificationBadge(verificationData) {
   `;
 
   badge.addEventListener('click', () => {
-    showVerificationDetails(verificationData);
+    showVerificationDetailsWithUsername(verificationData);
   });
 
   document.body.appendChild(badge);
+}
+
+function showSuccessNotification(data: any) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10002;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    max-width: 350px;
+    animation: slideInRight 0.3s ease-out;
+  `;
+
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+      <div style="width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 8px;">
+        ✓
+      </div>
+      <strong>Tweet Registered on TruthChain!</strong>
+    </div>
+    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 8px;">
+      🔗 Hashed and saved in TruthChain database<br>
+      ⛓️ Registered with your wallet on Stacks blockchain<br>
+      🕐 Time-stamped for immutable proof
+    </div>
+    ${data.cid ? `<div style="font-size: 11px; font-family: monospace; background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 6px; margin-top: 8px;">CID: ${data.cid.slice(0, 20)}...</div>` : ''}
+  `;
+
+  // Add CSS animation
+  if (!document.querySelector('#truthchain-animations')) {
+    const style = document.createElement('style');
+    style.id = 'truthchain-animations';
+    style.textContent = `
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(notification);
+
+  // Auto-remove after 8 seconds
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.animation = 'slideInRight 0.3s ease-out reverse';
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, 8000);
 }
 
 function showVerificationDetails(data) {
