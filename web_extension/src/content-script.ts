@@ -413,6 +413,155 @@ function showSuccessNotification(data: any) {
   }, 8000);
 }
 
+async function showVerificationDetailsWithUsername(data) {
+  // Create loading modal first
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  `;
+
+  modal.innerHTML = `
+    <div style="background: white; border-radius: 16px; padding: 32px; max-width: 520px; margin: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); position: relative;">
+      <div style="display: flex; align-items: center; justify-center; margin-bottom: 24px;">
+        <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      </div>
+      <div style="text-align: center; color: #6b7280; font-size: 16px;">
+        Verifying content authenticity...
+      </div>
+    </div>
+  `;
+
+  // Add spinner animation
+  if (!document.querySelector('#spinner-style')) {
+    const style = document.createElement('style');
+    style.id = 'spinner-style';
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(modal);
+
+  try {
+    // Get username from wallet address
+    let username = 'Unknown User';
+    if (data.owner) {
+      // Send message to background script to get username
+      chrome.runtime.sendMessage({ 
+        action: 'getUsernameByWallet', 
+        walletAddress: data.owner 
+      }, (response) => {
+        if (response?.success && response.username) {
+          username = response.username;
+        }
+        
+        // Update modal with verification details
+        showVerificationModal(modal, data, username);
+      });
+    } else {
+      showVerificationModal(modal, data, username);
+    }
+  } catch (error) {
+    console.error('Error loading verification details:', error);
+    showVerificationModal(modal, data, 'Unknown User');
+  }
+}
+
+function showVerificationModal(modal, data, username) {
+  modal.innerHTML = `
+    <div style="background: white; border-radius: 16px; padding: 0; max-width: 520px; margin: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); overflow: hidden;">
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 24px; position: relative;">
+        <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px;">×</button>
+        <div style="display: flex; align-items: center;">
+          <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 16px; font-size: 20px;">🛡️</div>
+          <div>
+            <h3 style="margin: 0; color: white; font-size: 22px; font-weight: bold;">Content Verified</h3>
+            <p style="margin: 4px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Blockchain proof of authenticity</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 24px;">
+        <!-- User Info -->
+        <div style="background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px;">@</div>
+            <div>
+              <h4 style="margin: 0; color: #065f46; font-size: 16px; font-weight: bold;">TruthChain Username</h4>
+              <p style="margin: 2px 0 0 0; color: #047857; font-size: 14px;">@${username}</p>
+            </div>
+          </div>
+          <p style="margin: 0; color: #064e3b; font-size: 13px;">
+            Click the badge to verify authenticity. Enter the username shown to confirm when and by whom it was registered.
+          </p>
+        </div>
+
+        <!-- Verification Details -->
+        <div style="space-y: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Wallet Owner</span>
+            <span style="color: #1f2937; font-size: 14px; font-family: monospace; background: #f9fafb; padding: 4px 8px; border-radius: 6px;">${data.owner ? data.owner.slice(0,12) + '...' + data.owner.slice(-8) : 'Unknown'}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Registration Date</span>
+            <span style="color: #1f2937; font-size: 14px;">${new Date(data.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Registration Time</span>
+            <span style="color: #1f2937; font-size: 14px;">${new Date(data.timestamp).toLocaleTimeString()}</span>
+          </div>
+          
+          ${data.txId ? `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Transaction</span>
+            <a href="https://explorer.hiro.so/txid/${data.txId}?chain=testnet" target="_blank" style="color: #10b981; font-size: 14px; text-decoration: none; font-family: monospace; background: #f0fdfa; padding: 4px 8px; border-radius: 6px; border: 1px solid #a7f3d0;">${data.txId.slice(0,8)}...${data.txId.slice(-8)}</a>
+          </div>
+          ` : ''}
+          
+          ${data.cid ? `
+          <div style="display: flex; justify-content: space-between; align-items: start; padding: 12px 0;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500; margin-top: 2px;">Content Hash</span>
+            <span style="color: #1f2937; font-size: 12px; font-family: monospace; background: #f9fafb; padding: 6px 8px; border-radius: 6px; max-width: 200px; word-break: break-all; line-height: 1.3;">${data.cid}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <!-- Actions -->
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
+          <div style="display: flex; gap: 12px;">
+            ${data.txId ? `
+            <button onclick="window.open('https://explorer.hiro.so/txid/${data.txId}?chain=testnet', '_blank')" style="flex: 1; background: #f3f4f6; color: #374151; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
+              View on Explorer
+            </button>
+            ` : ''}
+            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function showVerificationDetails(data) {
   const modal = document.createElement('div');
   modal.style.cssText = `
