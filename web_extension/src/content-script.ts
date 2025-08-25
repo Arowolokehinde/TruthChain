@@ -1019,19 +1019,26 @@ setTimeout(() => {
   }
 }, 30000);
 
-// Enhanced message handling with improved wallet integration
+// Enhanced message handling with page script communication
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Content script received message:', request.action);
   
   switch (request.action) {
     case 'detectWallets':
-      const detection = detectWalletsEnhanced();
-      console.log('Wallet detection result:', detection);
-      sendResponse(detection);
-      break;
+      detectWalletsViaPageScript()
+        .then(result => {
+          console.log('Wallet detection result:', result);
+          sendResponse(result);
+        })
+        .catch(error => {
+          console.error('Wallet detection failed:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Keep message channel open for async response
       
     case 'connectWallet':
-      connectWalletEnhanced()
+    case 'connectXverse':
+      connectWalletViaPageScript()
         .then(result => {
           console.log('Wallet connection successful:', result);
           sendResponse(result);
@@ -1052,6 +1059,154 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
   }
 });
+
+// Page script communication functions
+let messageId = 0;
+const pendingMessages = new Map();
+
+function sendMessageToPageScript(type: string, data: any = {}): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const requestId = `req_${++messageId}_${Date.now()}`;
+    
+    // Store the promise callbacks
+    pendingMessages.set(requestId, { resolve, reject });
+    
+    // Send message to page script
+    window.postMessage({
+      type,
+      requestId,
+      ...data
+    }, '*');
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (pendingMessages.has(requestId)) {
+        pendingMessages.delete(requestId);
+        reject(new Error('Timeout waiting for page script response'));
+      }
+    }, 10000);
+  });
+}
+
+// Listen for messages from page script
+window.addEventListener('message', (event) => {
+  // Only accept messages from same origin
+  if (event.origin !== window.location.origin) {
+    return;
+  }
+  
+  // Only handle TruthChain responses
+  if (!event.data?.type?.startsWith('TRUTHCHAIN_') || !event.data.requestId) {
+    return;
+  }
+  
+  console.log('Content script received page script message:', event.data);
+  
+  const { requestId, success, data, error } = event.data;
+  
+  if (pendingMessages.has(requestId)) {
+    const { resolve, reject } = pendingMessages.get(requestId);
+    pendingMessages.delete(requestId);
+    
+    if (success) {
+      resolve(data);
+    } else {
+      reject(new Error(error || 'Unknown error'));
+    }
+  }
+});
+
+async function detectWalletsViaPageScript() {
+  try {
+    const detection = await sendMessageToPageScript('TRUTHCHAIN_DETECT_WALLETS');
+    
+    const result = {
+      available: [] as string[],
+      xverse: false,
+      leather: false,
+      stacks: false,
+      details: {} as Record<string, any>,
+      providers: detection.providers || {}
+    };
+    
+    // Process detection results
+    Object.entries(detection.providers || {}).forEach(([key, provider]: [string, any]) => {
+      if (provider.isDetected) {
+        result.available.push(key);
+        result[key as keyof typeof result] = true;
+        result.details[key] = {
+          name: provider.name,
+          isDetected: true,
+          hasProvider: !!provider.provider
+        };
+      }
+    });
+    
+    // Store detection result globally
+    (window as any).__truthchain_wallets_detected = result;
+    
+    console.log(`TruthChain: Page script detection found ${result.available.length} wallet(s):`, result.available);
+    
+    return result;
+  } catch (error) {
+    console.error('Page script wallet detection failed:', error);
+    
+    // Fallback to legacy detection
+    return detectWalletsEnhanced();
+  }
+}
+
+async function connectWalletViaPageScript() {
+  try {
+    const detection = await detectWalletsViaPageScript();
+    
+    if (detection.available.length === 0) {
+      throw new Error('No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.');
+    }
+    
+    // Try connecting to available wallets in priority order
+    const connectionOrder = ['xverse', 'leather', 'stacks'];
+    let lastError: Error | null = null;
+    
+    for (const walletType of connectionOrder) {
+      if (detection.available.includes(walletType)) {
+        try {
+          console.log(`TruthChain: Attempting page script connection to ${walletType}`);
+          
+          const result = await sendMessageToPageScript('TRUTHCHAIN_CONNECT_WALLET', {
+            provider: walletType
+          });
+          
+          if (result.success) {
+            // Store successful connection globally
+            (window as any).__truthchain_connected_wallet = result;
+            
+            return result;
+          }
+          
+        } catch (error) {
+          lastError = error as Error;
+          console.log(`Page script connection attempt to ${walletType} failed:`, error);
+          
+          // If user explicitly rejected, don't try other wallets
+          if (error.message?.toLowerCase().includes('user rejected') || 
+              error.message?.toLowerCase().includes('denied') ||
+              error.message?.toLowerCase().includes('cancelled')) {
+            throw new Error('Connection cancelled by user');
+          }
+        }
+      }
+    }
+    
+    throw lastError || new Error('All wallet connections failed');
+    
+  } catch (error) {
+    console.error('Page script wallet connection failed:', error);
+    
+    // Fallback to legacy connection
+    return connectWalletEnhanced();
+  }
+}
 
 // Enhanced wallet detection
 function detectWalletsEnhanced() {

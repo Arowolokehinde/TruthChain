@@ -34,8 +34,6 @@ declare global {
 export class WalletIntegration {
   private static instance: WalletIntegration;
   private connectedWallet: WalletConnection | null = null;
-  private detectionAttempts = 0;
-  private maxDetectionAttempts = 30; // 30 seconds with 1-second intervals
   private isProduction = process.env.NODE_ENV === 'production';
   
   private constructor() {}
@@ -149,12 +147,12 @@ export class WalletIntegration {
         return connection;
       } catch (error) {
         lastError = error as Error;
-        console.log(`Connection attempt failed: ${error.message}`);
+        console.log(`Connection attempt failed: ${(error as Error).message}`);
         
         // If user explicitly rejected, don't try other wallets
-        if (error.message?.includes('User rejected') || 
-            error.message?.includes('denied') ||
-            error.message?.includes('cancelled')) {
+        if ((error as Error).message?.includes('User rejected') || 
+            (error as Error).message?.includes('denied') ||
+            (error as Error).message?.includes('cancelled')) {
           throw error;
         }
       }
@@ -206,7 +204,7 @@ export class WalletIntegration {
       };
     } catch (error) {
       console.error('Xverse connection failed:', error);
-      throw new Error(`Xverse connection failed: ${error.message}`);
+      throw new Error(`Xverse connection failed: ${(error as Error).message}`);
     }
   }
   
@@ -253,7 +251,7 @@ export class WalletIntegration {
       };
     } catch (error) {
       console.error('Leather connection failed:', error);
-      throw new Error(`Leather connection failed: ${error.message}`);
+      throw new Error(`Leather connection failed: ${(error as Error).message}`);
     }
   }
   
@@ -281,7 +279,7 @@ export class WalletIntegration {
       };
     } catch (error) {
       console.error('Generic provider connection failed:', error);
-      throw new Error(`Generic provider connection failed: ${error.message}`);
+      throw new Error(`Generic provider connection failed: ${(error as Error).message}`);
     }
   }
   

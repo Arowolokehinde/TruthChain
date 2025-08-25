@@ -59,6 +59,15 @@
       "js": ["content-script.js"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*.x.com/*",
+        "https://*.twitter.com/*"
+      ],
+      "js": ["page-script.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   

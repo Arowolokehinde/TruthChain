@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import TruthChainUsernameManager, { TruthChainUser } from './utils/username-manager'
+import TruthChainUsernameManager, { type TruthChainUser } from './utils/username-manager'
 
 interface WalletState {
   isConnected: boolean;
@@ -82,15 +82,18 @@ const App = () => {
             });
 
             // Check for existing username after wallet connection
-            const usernameManager = TruthChainUsernameManager.getInstance();
-            const user = await usernameManager.getUserByWallet(response.walletData.address);
-            if (user) {
-              setCurrentUser(user);
-              setWallet(prev => ({ ...prev, username: user.username }));
-            } else {
-              // Prompt for username creation
-              setShowUsernameSetup(true);
-            }
+            const checkUsername = async () => {
+              const usernameManager = TruthChainUsernameManager.getInstance();
+              const user = await usernameManager.getUserByWallet(response.walletData.address);
+              if (user) {
+                setCurrentUser(user);
+                setWallet(prev => ({ ...prev, username: user.username }));
+              } else {
+                // Prompt for username creation
+                setShowUsernameSetup(true);
+              }
+            };
+            checkUsername();
             
             const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
             const network = response.walletData.network || 'testnet';
