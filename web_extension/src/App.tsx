@@ -66,12 +66,47 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      console.log('TruthChain: Attempting direct @stacks/connect approach...');
+      console.log('TruthChain: Attempting @stacks/connect with wallet provider detection...');
       
-      // Use @stacks/connect directly in popup - bypasses all hooking issues
-      const { connect } = await import('@stacks/connect');
+      // First check what wallets are actually detected via our content script
+      // @ts-ignore
+      const detectionResult = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'detectWallets' }, (response) => {
+          console.log('TruthChain: Wallet detection result:', response);
+          resolve(response);
+        });
+      });
       
-      console.log('TruthChain: Calling @stacks/connect - should show wallet modal');
+      const { connect, disconnect } = await import('@stacks/connect');
+      
+      // Ensure clean slate
+      try {
+        await disconnect();
+      } catch (e) {
+        // Ignore disconnect errors
+      }
+      
+      console.log('TruthChain: Showing @stacks/connect modal');
+      
+      // Show helpful message about using installed wallets
+      const walletInfo = detectionResult as any;
+      if (walletInfo?.xverse || walletInfo?.leather) {
+        const installedWallets = [];
+        if (walletInfo.xverse) installedWallets.push('Xverse');
+        if (walletInfo.leather) installedWallets.push('Leather');
+        
+        alert(
+          `🎯 Installed Wallets Detected!\n\n` +
+          `Found: ${installedWallets.join(', ')}\n\n` +
+          `💡 In the modal that appears:\n` +
+          `• If you see "Install" instead of "Connect"\n` +
+          `• Click on your wallet (${installedWallets[0]}) anyway\n` +
+          `• It will connect to your installed wallet\n\n` +
+          `This is a known display issue with the modal.`
+        );
+      }
+      
+      // Use @stacks/connect modal  
       const response = await connect();
       
       console.log('TruthChain: @stacks/connect response:', response);
