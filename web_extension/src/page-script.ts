@@ -354,59 +354,60 @@ class AdvancedWalletDetector {
   }
 
   private async connectXverse(): Promise<WalletConnectionResult> {
-    console.log(`TruthChain: [XVERSE] Starting Xverse connection`);
+    console.log(`TruthChain: [XVERSE] Starting Xverse connection - using direct XverseProviders approach`);
+    
+    // Use the working XverseProviders method directly
+    // This avoids any module loading or compatibility issues
+    return await this.connectXverseLegacy();
+  }
+
+  // Modern APIs removed for simplicity - using direct XverseProviders only
+
+  private async connectXverseLegacy(): Promise<WalletConnectionResult> {
+    console.log(`TruthChain: [XVERSE] Using legacy XverseProviders method`);
     
     const xverse = (window as any).XverseProviders?.StacksProvider;
-    console.log(`TruthChain: [XVERSE] Xverse provider available:`, !!xverse);
-    console.log(`TruthChain: [XVERSE] Full XverseProviders object:`, (window as any).XverseProviders);
+    console.log(`TruthChain: [XVERSE] Legacy provider available:`, !!xverse);
     
     if (!xverse) {
-      console.error(`TruthChain: [XVERSE] Xverse provider not available!`);
-      throw new Error('Xverse provider not available');
+      throw new Error('Xverse wallet not found. Please install Xverse extension and refresh the page.');
     }
 
-    console.log(`TruthChain: [XVERSE] About to call xverse.request('stx_requestAccounts') - this should trigger Xverse popup`);
+    console.log(`TruthChain: [XVERSE] Calling legacy stx_requestAccounts - this should trigger popup`);
     
     try {
-      // Request accounts with timeout
       const accounts = await Promise.race([
         xverse.request('stx_requestAccounts'),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 30000)
+          setTimeout(() => reject(new Error('Connection timeout - popup may have been blocked')), 30000)
         )
       ]) as string[];
 
-      console.log(`TruthChain: [XVERSE] Got accounts response:`, accounts);
+      console.log(`TruthChain: [XVERSE] Legacy accounts response:`, accounts);
 
       if (!accounts || accounts.length === 0) {
-        console.error(`TruthChain: [XVERSE] No accounts returned from Xverse`);
-        throw new Error('No accounts available');
+        throw new Error('No Xverse accounts available - please unlock your wallet');
       }
 
-      console.log(`TruthChain: [XVERSE] Accounts received, now getting address details`);
-      
-      // Get address details
       const addressInfo = await xverse.request('stx_getAddresses');
-      
-      console.log(`TruthChain: [XVERSE] Address info received:`, addressInfo);
+      console.log(`TruthChain: [XVERSE] Legacy address info:`, addressInfo);
       
       if (!addressInfo?.addresses?.length) {
-        console.error(`TruthChain: [XVERSE] No address info returned from Xverse`);
-        throw new Error('Could not retrieve address information');
+        throw new Error('Could not get address from Xverse');
       }
 
       const primaryAddress = addressInfo.addresses[0];
-      console.log(`TruthChain: [XVERSE] Connection successful! Address:`, primaryAddress.address);
+      console.log(`TruthChain: [XVERSE] Legacy connection successful! Address:`, primaryAddress.address);
 
       return {
         success: true,
         provider: 'xverse',
         address: primaryAddress.address,
         publicKey: primaryAddress.publicKey || `xverse-${Date.now()}`,
-        network: 'testnet'
+        network: 'mainnet'
       };
     } catch (error) {
-      console.error(`TruthChain: [XVERSE] Error during connection:`, error);
+      console.error(`TruthChain: [XVERSE] Legacy connection failed:`, error);
       throw error;
     }
   }

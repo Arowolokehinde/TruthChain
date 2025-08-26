@@ -64,84 +64,95 @@ const App = () => {
 
   const connectStacksWallet = async () => {
     setIsLoading(true);
+    
     try {
-      console.log('TruthChain: Attempting to connect Stacks wallet...');
+      console.log('TruthChain: Attempting direct @stacks/connect approach...');
       
-      // @ts-ignore
-      chrome.runtime.sendMessage(
-        { action: 'connectXverse' },
-        (response: { success: boolean; walletData?: any; error?: string }) => {
-          console.log('Wallet connection response:', response);
-          
-          if (response && response.success && response.walletData) {
-            setWallet({
-              isConnected: true,
-              address: response.walletData.address,
-              publicKey: response.walletData.publicKey,
-              username: null
-            });
+      // Use @stacks/connect directly in popup - bypasses all hooking issues
+      const { connect } = await import('@stacks/connect');
+      
+      console.log('TruthChain: Calling @stacks/connect - should show wallet modal');
+      const response = await connect();
+      
+      console.log('TruthChain: @stacks/connect response:', response);
+      
+      if (response?.addresses?.length > 0) {
+        const address = typeof response.addresses[0] === 'string' 
+          ? response.addresses[0] 
+          : response.addresses[0].address;
+        
+        const walletData = {
+          address: address,
+          publicKey: (response.addresses[0] as any)?.publicKey || `connect-${Date.now()}`,
+          provider: 'stacks-connect',
+          walletName: 'Stacks Wallet',
+          isConnected: true,
+          network: 'mainnet'
+        };
+        
+        setWallet({
+          isConnected: true,
+          address: walletData.address,
+          publicKey: walletData.publicKey,
+          username: null
+        });
 
-            // Check for existing username after wallet connection
-            const checkUsername = async () => {
-              const usernameManager = TruthChainUsernameManager.getInstance();
-              const user = await usernameManager.getUserByWallet(response.walletData.address);
-              if (user) {
-                setCurrentUser(user);
-                setWallet(prev => ({ ...prev, username: user.username }));
-              } else {
-                // Prompt for username creation
-                setShowUsernameSetup(true);
-              }
-            };
-            checkUsername();
-            
-            const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
-            const network = response.walletData.network || 'testnet';
-            
-            alert(
-              `🎉 ${walletName} Connected Successfully!\n\n` +
-              `📍 Address: ${response.walletData.address.slice(0, 12)}...${response.walletData.address.slice(-8)}\n` +
-              `🌐 Network: ${network.charAt(0).toUpperCase() + network.slice(1)}\n` +
-              `🔗 Provider: ${response.walletData.provider}\n\n` +
-              `✅ Ready for TruthChain operations!`
-            );
+        // Check for existing username after wallet connection
+        const checkUsername = async () => {
+          const usernameManager = TruthChainUsernameManager.getInstance();
+          const user = await usernameManager.getUserByWallet(walletData.address);
+          if (user) {
+            setCurrentUser(user);
+            setWallet(prev => ({ ...prev, username: user.username }));
           } else {
-            console.error('Wallet connection failed:', response?.error);
-            
-            const errorMsg = response?.error || 'Unknown error';
-            
-            if (errorMsg.includes('No Stacks wallet') || errorMsg.includes('not detected') || errorMsg.includes('not found')) {
-              alert(
-                '🔗 Stacks Wallet Required\n\n' +
-                'TruthChain supports these Stacks wallets:\n\n' +
-                '🥇 Xverse Wallet (Recommended)\n' +
-                '   → Chrome Web Store → Search "Xverse Wallet"\n' +
-                '   → Supports Bitcoin + Stacks\n\n' +
-                '🥈 Leather Wallet (Hiro)\n' +
-                '   → Visit leather.io or hiro.so\n' +
-                '   → Full Stacks ecosystem support\n\n' +
-                'Setup Instructions:\n' +
-                '1. Install your preferred wallet\n' +
-                '2. Create or restore your account\n' +
-                '3. Make sure the wallet is unlocked\n' +
-                '4. Refresh this extension\n' +
-                '5. Try connecting again\n\n' +
-                'Need testnet STX? Visit stacks.co/testnet-faucet'
-              );
-            } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
-              alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
-            } else if (errorMsg.includes('timeout')) {
-              alert('⏱️ Connection Timeout\n\nWallet connection timed out.\n\nTroubleshooting:\n• Make sure your wallet is unlocked\n• Check for wallet popup windows\n• Try refreshing the page\n• Restart your wallet extension');
-            } else {
-              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure wallet is unlocked\n• Check wallet permissions\n• Refresh the page and try again\n• Restart browser if needed`);
-            }
+            setShowUsernameSetup(true);
           }
-          setIsLoading(false);
-        }
-      );
+        };
+        checkUsername();
+        
+        alert(
+          `🎉 ${walletData.walletName} Connected Successfully!\n\n` +
+          `📍 Address: ${walletData.address.slice(0, 12)}...${walletData.address.slice(-8)}\n` +
+          `🌐 Network: ${walletData.network}\n` +
+          `🔗 Provider: ${walletData.provider}\n\n` +
+          `✅ Ready for TruthChain operations!`
+        );
+        
+      } else {
+        throw new Error('No addresses returned from wallet connection');
+      }
+      
+      setIsLoading(false);
+      
     } catch (error) {
-      console.error('Wallet connection error:', error);
-      alert('⚠️ Extension Error\n\nSomething went wrong with the extension.\n\nTry:\n• Refresh this extension\n• Restart your browser\n• Check browser console for errors');
+      console.error('Direct @stacks/connect error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMsg.includes('No wallet') || errorMsg.includes('not found') || errorMsg.includes('install')) {
+        alert(
+          '🔗 Stacks Wallet Required\n\n' +
+          'TruthChain supports these Stacks wallets:\n\n' +
+          '🥇 Xverse Wallet (Recommended)\n' +
+          '   → Chrome Web Store → Search "Xverse Wallet"\n' +
+          '   → Supports Bitcoin + Stacks\n\n' +
+          '🥈 Leather Wallet (Hiro)\n' +
+          '   → Visit leather.io or hiro.so\n' +
+          '   → Full Stacks ecosystem support\n\n' +
+          'Setup Instructions:\n' +
+          '1. Install your preferred wallet\n' +
+          '2. Create or restore your account\n' +
+          '3. Make sure the wallet is unlocked\n' +
+          '4. Refresh this extension\n' +
+          '5. Try connecting again\n\n' +
+          'Need testnet STX? Visit stacks.co/testnet-faucet'
+        );
+      } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
+        alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
+      } else if (errorMsg.includes('timeout')) {
+        alert('⏱️ Connection Timeout\n\nWallet connection timed out.\n\nTroubleshooting:\n• Make sure your wallet is unlocked\n• Check for wallet popup windows\n• Try refreshing the page\n• Restart your wallet extension');
+      } else {
+        alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure wallet is unlocked\n• Check wallet permissions\n• Refresh the page and try again\n• Restart browser if needed`);
+      }
       setIsLoading(false);
     }
   };

@@ -16,20 +16,7 @@ export interface WalletProvider {
   removeListener?(event: string, handler: Function): void;
 }
 
-interface XverseProviders {
-  StacksProvider: WalletProvider;
-  BitcoinProvider?: WalletProvider;
-}
-
-declare global {
-  interface Window {
-    XverseProviders?: XverseProviders;
-    LeatherProvider?: WalletProvider;
-    StacksProvider?: WalletProvider;
-    __truthchain_wallets_available?: string[];
-    __truthchain_wallet_result?: any;
-  }
-}
+// Window interface types handled in page-script.ts to avoid conflicts
 
 export class WalletIntegration {
   private static instance: WalletIntegration;
@@ -54,17 +41,17 @@ export class WalletIntegration {
     
     try {
       // Check for Xverse
-      if (window.XverseProviders?.StacksProvider) {
+      if ((window as any).XverseProviders?.StacksProvider) {
         detected.push('xverse');
       }
       
       // Check for Leather
-      if (window.LeatherProvider) {
+      if ((window as any).LeatherProvider) {
         detected.push('leather');
       }
       
       // Check for generic Stacks provider
-      if (window.StacksProvider) {
+      if ((window as any).StacksProvider) {
         detected.push('stacks');
       }
       
@@ -171,11 +158,11 @@ export class WalletIntegration {
    * Connect to Xverse wallet
    */
   private async connectXverse(): Promise<WalletConnection> {
-    if (!window.XverseProviders?.StacksProvider) {
+    if (!(window as any).XverseProviders?.StacksProvider) {
       throw new Error('Xverse provider not found');
     }
     
-    const provider = window.XverseProviders.StacksProvider;
+    const provider = (window as any).XverseProviders.StacksProvider;
     
     try {
       // Request account access
@@ -212,11 +199,11 @@ export class WalletIntegration {
    * Connect to Leather wallet
    */
   private async connectLeather(): Promise<WalletConnection> {
-    if (!window.LeatherProvider) {
+    if (!(window as any).LeatherProvider) {
       throw new Error('Leather provider not found');
     }
     
-    const provider = window.LeatherProvider;
+    const provider = (window as any).LeatherProvider;
     
     try {
       const result = await provider.request('stx_requestAccounts');
@@ -259,11 +246,11 @@ export class WalletIntegration {
    * Connect to generic Stacks provider (fallback)
    */
   private async connectGeneric(): Promise<WalletConnection> {
-    if (!window.StacksProvider) {
+    if (!(window as any).StacksProvider) {
       throw new Error('Generic Stacks provider not found');
     }
     
-    const provider = window.StacksProvider;
+    const provider = (window as any).StacksProvider;
     
     try {
       const accounts = await provider.request('stx_requestAccounts');
