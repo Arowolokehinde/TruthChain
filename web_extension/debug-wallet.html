@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🔧 Debug Wallet Detection - TruthChain</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f7fa;
+        }
+        .card { 
+            background: white; 
+            border-radius: 12px;
+            padding: 20px; 
+            margin: 15px 0; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { border-left: 4px solid #10b981; }
+        .error { border-left: 4px solid #ef4444; }
+        .warning { border-left: 4px solid #f59e0b; }
+        .info { border-left: 4px solid #3b82f6; }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 8px;
+            font-weight: 600;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status.online { background: #dcfce7; color: #166534; }
+        .status.offline { background: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔧 TruthChain Wallet Debug Console</h1>
+        <p>This page helps debug wallet provider detection issues.</p>
+        
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span>Extension Status:</span>
+            <span id="extensionStatus" class="status offline">Checking...</span>
+            <span>Page Script:</span>
+            <span id="pageScriptStatus" class="status offline">Checking...</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🎯 Quick Tests</h2>
+        <button onclick="testDirectWindowAccess()">1. Test Direct Window Access</button>
+        <button onclick="testPageScriptComm()">2. Test Page Script Communication</button>
+        <button onclick="testAdvancedPageScript()">3. Test Advanced Detection</button>
+        <button onclick="testContentScriptComm()">4. Test Content Script</button>
+        <button onclick="testWalletConnection()">5. Test Wallet Connection</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <div id="results"></div>
+
+    <div class="card info">
+        <h3>💡 Debugging Tips:</h3>
+        <ul>
+            <li><strong>Make sure Xverse is installed and unlocked</strong></li>
+            <li><strong>Load the TruthChain extension from /dist folder</strong></li>
+            <li><strong>Check browser console (F12) for errors</strong></li>
+            <li><strong>Try refreshing this page after loading extension</strong></li>
+            <li><strong>Test on a supported domain (medium.com, dev.to, etc.)</strong></li>
+        </ul>
+    </div>
+
+    <script>
+        let logCount = 0;
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `card ${type}`;
+            div.innerHTML = `
+                <small style="color: #666;">[${new Date().toLocaleTimeString()}] #${++logCount}</small>
+                <div>${message}</div>
+            `;
+            results.appendChild(div);
+            console.log(`[TruthChain Debug] ${message}`);
+            
+            // Auto-scroll to bottom
+            div.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearLogs() {
+            document.getElementById('results').innerHTML = '';
+            logCount = 0;
+        }
+
+        // Check extension status
+        function checkExtensionStatus() {
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                try {
+                    chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            document.getElementById('extensionStatus').textContent = 'Not Loaded';
+                            document.getElementById('extensionStatus').className = 'status offline';
+                        } else {
+                            document.getElementById('extensionStatus').textContent = 'Active';
+                            document.getElementById('extensionStatus').className = 'status online';
+                        }
+                    });
+                } catch (e) {
+                    document.getElementById('extensionStatus').textContent = 'Error';
+                    document.getElementById('extensionStatus').className = 'status offline';
+                }
+            } else {
+                document.getElementById('extensionStatus').textContent = 'Not Available';
+                document.getElementById('extensionStatus').className = 'status offline';
+            }
+        }
+
+        // Check page script status
+        function checkPageScriptStatus() {
+            let found = false;
+            
+            // Listen for page script initialization
+            window.addEventListener('message', (event) => {
+                if (event.data?.type === 'TRUTHCHAIN_WALLET_DETECTION_UPDATE') {
+                    if (!found) {
+                        document.getElementById('pageScriptStatus').textContent = 'Active';
+                        document.getElementById('pageScriptStatus').className = 'status online';
+                        found = true;
+                    }
+                }
+            });
+            
+            // Test page script communication
+            setTimeout(() => {
+                if (!found) {
+                    document.getElementById('pageScriptStatus').textContent = 'Not Responding';
+                    document.getElementById('pageScriptStatus').className = 'status offline';
+                }
+            }, 3000);
+        }
+
+        function testDirectWindowAccess() {
+            log('<h3>🔍 Testing Direct Window Access</h3>');
+            
+            const walletProps = [];
+            
+            // Check for Xverse
+            if (window.XverseProviders) {
+                walletProps.push(`✅ window.XverseProviders: ${JSON.stringify(Object.keys(window.XverseProviders))}`);
+                if (window.XverseProviders.StacksProvider) {
+                    walletProps.push(`✅ XverseProviders.StacksProvider: Available`);
+                } else {
+                    walletProps.push(`❌ XverseProviders.StacksProvider: Missing`);
+                }
+            } else {
+                walletProps.push('❌ window.XverseProviders: Not found');
+            }
+            
+            // Check for Leather
+            if (window.LeatherProvider) {
+                walletProps.push('✅ window.LeatherProvider: Found');
+            } else {
+                walletProps.push('❌ window.LeatherProvider: Not found');
+            }
+            
+            // Check for generic Stacks
+            if (window.StacksProvider) {
+                walletProps.push('✅ window.StacksProvider: Found');
+            } else {
+                walletProps.push('❌ window.StacksProvider: Not found');
+            }
+
+            // Search for wallet-related properties
+            const walletRelated = Object.keys(window).filter(key => 
+                key.toLowerCase().includes('verse') || 
+                key.toLowerCase().includes('leather') || 
+                key.toLowerCase().includes('stacks') ||
+                key.toLowerCase().includes('wallet')
+            );
+            
+            if (walletRelated.length > 0) {
+                walletProps.push(`🔍 Wallet-related properties: ${walletRelated.join(', ')}`);
+            }
+
+            const result = walletProps.join('<br>');
+            log(result, walletProps.some(p => p.includes('✅')) ? 'success' : 'error');
+        }
+
+        function testPageScriptComm() {
+            log('<h3>📡 Testing Page Script Communication</h3>');
+            
+            let messageId = Date.now();
+            let responseReceived = false;
+            
+            const responseHandler = (event) => {
+                if (event.data?.type === 'TRUTHCHAIN_WALLET_DETECTION_RESULT' && 
+                    event.data.requestId === `test_${messageId}`) {
+                    responseReceived = true;
+                    window.removeEventListener('message', responseHandler);
+                    
+                    if (event.data.success) {
+                        log(`✅ Legacy page script responded successfully:<br><pre>${JSON.stringify(event.data.data, null, 2)}</pre>`, 'success');
+                        
+                        // Now test advanced detection
+                        testAdvancedPageScript();
+                    } else {
+                        log(`❌ Page script error: ${event.data.error}`, 'error');
+                    }
+                }
+            };
+            
+            window.addEventListener('message', responseHandler);
+            
+            // Send detection request
+            window.postMessage({
+                type: 'TRUTHCHAIN_DETECT_WALLETS',
+                requestId: `test_${messageId}`
+            }, '*');
+            
+            // Timeout check
+            setTimeout(() => {
+                if (!responseReceived) {
+                    window.removeEventListener('message', responseHandler);
+                    log('❌ Legacy page script timeout - no response received. Page script may not be loaded.', 'error');
+                }
+            }, 5000);
+        }
+
+        function testAdvancedPageScript() {
+            log('<h3>🚀 Testing Advanced Page Script Communication</h3>');
+            
+            let messageId = Date.now();
+            let responseReceived = false;
+            
+            const responseHandler = (event) => {
+                if (event.data?.type === 'TRUTHCHAIN_ADVANCED_DETECT_RESULT' && 
+                    event.data.requestId === `advanced_test_${messageId}`) {
+                    responseReceived = true;
+                    window.removeEventListener('message', responseHandler);
+                    
+                    if (event.data.success) {
+                        log(`✅ Advanced page script responded successfully:<br><pre>${JSON.stringify(event.data.data, null, 2)}</pre>`, 'success');
+                    } else {
+                        log(`❌ Advanced page script error: ${event.data.error}`, 'error');
+                    }
+                }
+            };
+            
+            window.addEventListener('message', responseHandler);
+            
+            // Send advanced detection request
+            window.postMessage({
+                type: 'TRUTHCHAIN_ADVANCED_DETECT',
+                requestId: `advanced_test_${messageId}`
+            }, '*');
+            
+            // Timeout check
+            setTimeout(() => {
+                if (!responseReceived) {
+                    window.removeEventListener('message', responseHandler);
+                    log('❌ Advanced page script timeout - no response received.', 'error');
+                }
+            }, 5000);
+        }
+
+        function testContentScriptComm() {
+            log('<h3>🔌 Testing Content Script Communication</h3>');
+            
+            if (typeof chrome === 'undefined' || !chrome.runtime) {
+                log('❌ Chrome extension APIs not available', 'error');
+                return;
+            }
+            
+            try {
+                chrome.runtime.sendMessage({ action: 'detectWallets' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        log(`❌ Content script error: ${chrome.runtime.lastError.message}`, 'error');
+                    } else if (response) {
+                        if (response.success !== false) {
+                            log(`✅ Content script detection successful:<br><pre>${JSON.stringify(response, null, 2)}</pre>`, 'success');
+                        } else {
+                            log(`❌ Content script detection failed: ${response.error || 'Unknown error'}`, 'error');
+                        }
+                    } else {
+                        log('❌ No response from content script', 'error');
+                    }
+                });
+            } catch (e) {
+                log(`❌ Content script communication failed: ${e.message}`, 'error');
+            }
+        }
+
+        async function testWalletConnection() {
+            log('<h3>🔗 Testing Wallet Connection</h3>');
+            
+            // First test page script detection
+            let detectionResult = null;
+            
+            try {
+                detectionResult = await new Promise((resolve, reject) => {
+                    const requestId = `connect_test_${Date.now()}`;
+                    
+                    const responseHandler = (event) => {
+                        if (event.data?.type === 'TRUTHCHAIN_WALLET_DETECTION_RESULT' && 
+                            event.data.requestId === requestId) {
+                            window.removeEventListener('message', responseHandler);
+                            
+                            if (event.data.success) {
+                                resolve(event.data.data);
+                            } else {
+                                reject(new Error(event.data.error));
+                            }
+                        }
+                    };
+                    
+                    window.addEventListener('message', responseHandler);
+                    
+                    window.postMessage({
+                        type: 'TRUTHCHAIN_DETECT_WALLETS',
+                        requestId: requestId
+                    }, '*');
+                    
+                    setTimeout(() => {
+                        window.removeEventListener('message', responseHandler);
+                        reject(new Error('Detection timeout'));
+                    }, 5000);
+                });
+                
+                log(`✅ Detection successful: ${Object.keys(detectionResult.providers || {}).length} providers found`, 'success');
+                
+            } catch (error) {
+                log(`❌ Detection failed: ${error.message}`, 'error');
+                return;
+            }
+            
+            // Find available wallet
+            const availableWallets = Object.entries(detectionResult.providers || {})
+                .filter(([key, provider]) => provider.isDetected);
+            
+            if (availableWallets.length === 0) {
+                log('❌ No available wallets for connection test', 'error');
+                return;
+            }
+            
+            const [walletType] = availableWallets[0];
+            log(`🔄 Attempting to connect to ${walletType} wallet...`, 'info');
+            
+            // Attempt connection with legacy method
+            try {
+                const connectionResult = await new Promise((resolve, reject) => {
+                    const requestId = `connect_${walletType}_${Date.now()}`;
+                    
+                    const responseHandler = (event) => {
+                        if (event.data?.type === 'TRUTHCHAIN_WALLET_CONNECTION_RESULT' && 
+                            event.data.requestId === requestId) {
+                            window.removeEventListener('message', responseHandler);
+                            
+                            if (event.data.success) {
+                                resolve(event.data.data);
+                            } else {
+                                reject(new Error(event.data.error));
+                            }
+                        }
+                    };
+                    
+                    window.addEventListener('message', responseHandler);
+                    
+                    window.postMessage({
+                        type: 'TRUTHCHAIN_CONNECT_WALLET',
+                        requestId: requestId,
+                        provider: walletType
+                    }, '*');
+                    
+                    setTimeout(() => {
+                        window.removeEventListener('message', responseHandler);
+                        reject(new Error('Legacy connection timeout'));
+                    }, 30000);
+                });
+                
+                log(`🎉 ${walletType} legacy connection successful!<br><pre>${JSON.stringify(connectionResult.walletData, null, 2)}</pre>`, 'success');
+                
+            } catch (error) {
+                log(`❌ ${walletType} legacy connection failed: ${error.message}`, 'error');
+                
+                // Try advanced connection method
+                log(`🔄 Attempting advanced connection to ${walletType}...`, 'info');
+                
+                try {
+                    const advancedResult = await new Promise((resolve, reject) => {
+                        const requestId = `advanced_connect_${walletType}_${Date.now()}`;
+                        
+                        const responseHandler = (event) => {
+                            if (event.data?.type === 'TRUTHCHAIN_ADVANCED_CONNECT_RESULT' && 
+                                event.data.requestId === requestId) {
+                                window.removeEventListener('message', responseHandler);
+                                
+                                if (event.data.success) {
+                                    resolve(event.data.data);
+                                } else {
+                                    reject(new Error(event.data.error));
+                                }
+                            }
+                        };
+                        
+                        window.addEventListener('message', responseHandler);
+                        
+                        window.postMessage({
+                            type: 'TRUTHCHAIN_ADVANCED_CONNECT',
+                            requestId: requestId,
+                            provider: walletType
+                        }, '*');
+                        
+                        setTimeout(() => {
+                            window.removeEventListener('message', responseHandler);
+                            reject(new Error('Advanced connection timeout'));
+                        }, 30000);
+                    });
+                    
+                    log(`🎉 ${walletType} advanced connection successful!<br><pre>${JSON.stringify(advancedResult, null, 2)}</pre>`, 'success');
+                    
+                } catch (advancedError) {
+                    log(`❌ ${walletType} advanced connection also failed: ${advancedError.message}`, 'error');
+                }
+            }
+        }
+
+        // Initialize checks when page loads
+        window.addEventListener('load', () => {
+            log('🚀 TruthChain Debug Console Started', 'info');
+            
+            setTimeout(() => {
+                checkExtensionStatus();
+                checkPageScriptStatus();
+            }, 1000);
+            
+            // Auto-run basic tests
+            setTimeout(() => {
+                log('<hr><h2>🔄 Running Automatic Tests...</h2>');
+                testDirectWindowAccess();
+            }, 2000);
+        });
+
+        // Listen for page script messages
+        window.addEventListener('message', (event) => {
+            if (event.data?.type?.startsWith('TRUTHCHAIN_')) {
+                console.log('Received page script message:', event.data);
+                
+                if (event.data.type === 'TRUTHCHAIN_WALLET_DETECTION_UPDATE') {
+                    const providers = event.data.data?.providers || {};
+                    const detected = Object.entries(providers).filter(([k, v]) => v.isDetected);
+                    log(`📡 Wallet detection update: ${detected.length} wallet(s) detected - ${detected.map(([k]) => k).join(', ')}`, 'info');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

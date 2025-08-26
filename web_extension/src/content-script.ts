@@ -1173,7 +1173,7 @@ async function connectWalletViaPageScript() {
         try {
           console.log(`TruthChain: Attempting page script connection to ${walletType}`);
           
-          const result = await sendMessageToPageScript('TRUTHCHAIN_CONNECT_WALLET', {
+          const result = await sendMessageToPageScript('TRUTHCHAIN_ADVANCED_CONNECT', {
             provider: walletType
           });
           
@@ -1208,58 +1208,164 @@ async function connectWalletViaPageScript() {
   }
 }
 
-// Enhanced wallet detection
-function detectWalletsEnhanced() {
-  const detected = {
-    available: [] as string[],
-    xverse: false,
-    leather: false,
-    stacks: false,
-    details: {} as Record<string, any>
-  };
+// Enhanced wallet detection - use page script communication
+async function detectWalletsEnhanced() {
+  console.log('TruthChain: Using advanced page script detection...');
   
   try {
-    // Check for Xverse with detailed info
-    if ((window as any).XverseProviders?.StacksProvider) {
-      detected.available.push('xverse');
-      detected.xverse = true;
-      detected.details.xverse = {
-        hasStacksProvider: true,
-        hasBitcoinProvider: !!(window as any).XverseProviders?.BitcoinProvider,
-        version: (window as any).XverseProviders?.version || 'unknown'
+    // Try advanced detection first
+    const advancedResult = await new Promise<any>((resolve, reject) => {
+      const requestId = `enhanced_detect_${Date.now()}`;
+      
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'TRUTHCHAIN_ADVANCED_DETECT_RESULT' && 
+            event.data.requestId === requestId) {
+          window.removeEventListener('message', responseHandler);
+          
+          if (event.data.success) {
+            resolve(event.data.data);
+          } else {
+            reject(new Error(event.data.error));
+          }
+        }
       };
+      
+      window.addEventListener('message', responseHandler);
+      
+      window.postMessage({
+        type: 'TRUTHCHAIN_ADVANCED_DETECT',
+        requestId: requestId
+      }, '*');
+      
+      setTimeout(() => {
+        window.removeEventListener('message', responseHandler);
+        reject(new Error('Advanced detection timeout'));
+      }, 5000);
+    });
+    
+    // Convert advanced format to legacy format
+    const detected = {
+      available: [] as string[],
+      xverse: false,
+      leather: false,
+      stacks: false,
+      details: {} as Record<string, any>
+    };
+    
+    console.log(`TruthChain: [CONVERSION] Converting ${advancedResult.length} advanced results:`, advancedResult);
+    
+    // Ensure priority order: xverse first, then leather, then stacks
+    const priorityOrder = ['xverse', 'leather', 'stacks'];
+    const detectedWallets = new Set<string>();
+    
+    for (const wallet of advancedResult) {
+      if (wallet.detected) {
+        const providerKey = wallet.provider.includes('-') ? wallet.provider.split('-')[0] : wallet.provider;
+        detectedWallets.add(providerKey);
+        
+        console.log(`TruthChain: [CONVERSION] Processing wallet: ${wallet.name} (${providerKey})`);
+        
+        if (providerKey === 'xverse') {
+          detected.xverse = true;
+          detected.details.xverse = {
+            hasStacksProvider: true,
+            version: wallet.version || 'unknown',
+            methods: wallet.methods || []
+          };
+        } else if (providerKey === 'leather') {
+          detected.leather = true;
+          detected.details.leather = {
+            hasProvider: true,
+            version: wallet.version || 'unknown',
+            methods: wallet.methods || []
+          };
+        } else if (providerKey === 'stacks') {
+          detected.stacks = true;
+          detected.details.stacks = {
+            hasProvider: true,
+            isGeneric: true,
+            methods: wallet.methods || []
+          };
+        }
+      }
     }
     
-    // Check for Leather with detailed info
-    if ((window as any).LeatherProvider) {
-      detected.available.push('leather');
-      detected.leather = true;
-      detected.details.leather = {
-        hasProvider: true,
-        version: (window as any).LeatherProvider?.version || 'unknown'
-      };
+    // Build available array in priority order
+    for (const walletType of priorityOrder) {
+      if (detectedWallets.has(walletType)) {
+        detected.available.push(walletType);
+        console.log(`TruthChain: [CONVERSION] Added ${walletType} to available array at position ${detected.available.length - 1}`);
+      }
     }
     
-    // Check for generic Stacks provider
-    if ((window as any).StacksProvider && !(window as any).XverseProviders && !(window as any).LeatherProvider) {
-      detected.available.push('stacks');
-      detected.stacks = true;
-      detected.details.stacks = {
-        hasProvider: true,
-        isGeneric: true
-      };
-    }
+    console.log(`TruthChain: [CONVERSION] Final available array:`, detected.available);
     
-    // Store detection result globally
-    (window as any).__truthchain_wallets_detected = detected;
-    
-    console.log(`TruthChain: Enhanced detection found ${detected.available.length} wallet(s):`, detected.available);
+    console.log(`TruthChain: Advanced detection found ${detected.available.length} wallet(s):`, detected.available);
+    console.log(`TruthChain: [DEBUG] Full detection result:`, detected);
+    return detected;
     
   } catch (error) {
-    console.error('Enhanced wallet detection error:', error);
+    console.log('TruthChain: Advanced detection failed, falling back to legacy:', error);
+    
+    // Fallback to legacy detection via page script
+    return new Promise((resolve) => {
+      const requestId = `legacy_detect_${Date.now()}`;
+      
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'TRUTHCHAIN_WALLET_DETECTION_RESULT' && 
+            event.data.requestId === requestId) {
+          window.removeEventListener('message', responseHandler);
+          
+          if (event.data.success) {
+            const providers = event.data.data.providers;
+            const detected = {
+              available: [] as string[],
+              xverse: false,
+              leather: false,
+              stacks: false,
+              details: {} as Record<string, any>
+            };
+            
+            Object.entries(providers).forEach(([key, provider]: [string, any]) => {
+              if (provider.isDetected) {
+                detected.available.push(key);
+                detected[key as keyof typeof detected] = true;
+                detected.details[key] = { hasProvider: true };
+              }
+            });
+            
+            resolve(detected);
+          } else {
+            resolve({
+              available: [],
+              xverse: false,
+              leather: false,
+              stacks: false,
+              details: {}
+            });
+          }
+        }
+      };
+      
+      window.addEventListener('message', responseHandler);
+      
+      window.postMessage({
+        type: 'TRUTHCHAIN_DETECT_WALLETS',
+        requestId: requestId
+      }, '*');
+      
+      setTimeout(() => {
+        window.removeEventListener('message', responseHandler);
+        resolve({
+          available: [],
+          xverse: false,
+          leather: false,
+          stacks: false,
+          details: {}
+        });
+      }, 3000);
+    });
   }
-  
-  return detected;
 }
 
 // Enhanced wallet connection with better error handling
@@ -1269,7 +1375,7 @@ async function connectWalletEnhanced(): Promise<any> {
   // Wait a moment for wallet providers to fully initialize
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  const detection = detectWalletsEnhanced();
+  const detection = await detectWalletsEnhanced();
   
   if (detection.available.length === 0) {
     throw new Error(
@@ -1277,52 +1383,86 @@ async function connectWalletEnhanced(): Promise<any> {
     );
   }
   
-  // Try connecting to wallets in priority order
-  const connectionAttempts = [];
-  
-  if (detection.xverse) {
-    connectionAttempts.push(() => connectXverseEnhanced());
-  }
-  
-  if (detection.leather) {
-    connectionAttempts.push(() => connectLeatherEnhanced());
-  }
-  
-  if (detection.stacks) {
-    connectionAttempts.push(() => connectGenericEnhanced());
-  }
-  
+  // Try connecting to wallets in priority order using advanced page script
+  const walletPriority = ['xverse', 'leather', 'stacks'];
   let lastError: Error | null = null;
   
-  for (const [index, attemptConnection] of connectionAttempts.entries()) {
+  console.log(`TruthChain: [CONNECTION] Available wallets from detection:`, detection.available);
+  console.log(`TruthChain: [CONNECTION] Wallet priority order:`, walletPriority);
+  
+  for (const walletType of walletPriority) {
+    console.log(`TruthChain: [CONNECTION] Checking wallet: ${walletType}, available: ${detection.available.includes(walletType)}`);
+    
+    if (!detection.available.includes(walletType)) {
+      console.log(`TruthChain: [CONNECTION] Skipping ${walletType} - not in available list`);
+      continue;
+    }
+    
     try {
-      console.log(`TruthChain: Attempting connection ${index + 1}/${connectionAttempts.length}`);
-      const result = await attemptConnection();
+      console.log(`TruthChain: Attempting advanced connection to ${walletType}`);
+      
+      const result = await new Promise<any>((resolve, reject) => {
+        const requestId = `enhanced_connect_${walletType}_${Date.now()}`;
+        
+        const responseHandler = (event: MessageEvent) => {
+          if (event.data?.type === 'TRUTHCHAIN_ADVANCED_CONNECT_RESULT' && 
+              event.data.requestId === requestId) {
+            window.removeEventListener('message', responseHandler);
+            
+            if (event.data.success) {
+              resolve(event.data.data);
+            } else {
+              reject(new Error(event.data.error));
+            }
+          }
+        };
+        
+        window.addEventListener('message', responseHandler);
+        
+        window.postMessage({
+          type: 'TRUTHCHAIN_ADVANCED_CONNECT',
+          requestId: requestId,
+          provider: walletType
+        }, '*');
+        
+        setTimeout(() => {
+          window.removeEventListener('message', responseHandler);
+          reject(new Error('Advanced connection timeout'));
+        }, 30000);
+      });
       
       // Store successful connection globally for other scripts
       (window as any).__truthchain_connected_wallet = result;
       
       return {
         success: true,
-        walletData: result.walletData,
+        walletData: {
+          address: result.address,
+          publicKey: result.publicKey,
+          provider: result.provider,
+          walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1),
+          isConnected: true,
+          network: result.network || 'testnet'
+        },
         provider: result.provider,
-        walletName: result.walletName
+        walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1)
       };
       
     } catch (error) {
       lastError = error as Error;
-      console.log(`Connection attempt ${index + 1} failed:`, error.message);
+      console.log(`Advanced connection to ${walletType} failed:`, (error as Error).message);
       
       // If user explicitly rejected, don't try other wallets
-      if (error.message?.toLowerCase().includes('user rejected') || 
-          error.message?.toLowerCase().includes('denied') ||
-          error.message?.toLowerCase().includes('cancelled')) {
-        throw new Error('Connection cancelled by user');
+      if ((error as Error).message?.toLowerCase().includes('user rejected') || 
+          (error as Error).message?.toLowerCase().includes('denied') ||
+          (error as Error).message?.toLowerCase().includes('cancelled') ||
+          (error as Error).message?.toLowerCase().includes('timeout')) {
+        throw new Error(`Connection cancelled: ${(error as Error).message}`);
       }
     }
   }
   
-  throw lastError || new Error('All wallet connections failed');
+  throw lastError || new Error('All advanced wallet connections failed');
 }
 
 // Enhanced Xverse connection
@@ -1532,89 +1672,7 @@ async function connectWalletInPage() {
     
     window.addEventListener('message', messageListener);
     
-    // Inject wallet connection script into page
-    const script = document.createElement('script');
-    script.textContent = `
-      (async function() {
-        try {
-          console.log('TruthChain: Injected script running...');
-          
-          // Try Xverse first
-          if (window.XverseProviders?.StacksProvider) {
-            console.log('TruthChain: Found Xverse provider');
-            const provider = window.XverseProviders.StacksProvider;
-            
-            const accounts = await provider.request('stx_requestAccounts');
-            console.log('TruthChain: Xverse accounts:', accounts);
-            
-            if (accounts && accounts.length > 0) {
-              const addressInfo = await provider.request('stx_getAddresses');
-              console.log('TruthChain: Xverse addresses:', addressInfo);
-              
-              if (addressInfo?.addresses?.length) {
-                window.postMessage({
-                  type: 'TRUTHCHAIN_WALLET_RESPONSE',
-                  success: true,
-                  walletData: {
-                    address: addressInfo.addresses[0].address,
-                    publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
-                    provider: 'xverse',
-                    walletName: 'Xverse',
-                    isConnected: true
-                  }
-                }, '*');
-                return;
-              }
-            }
-          }
-          
-          // Try Leather
-          if (window.LeatherProvider) {
-            console.log('TruthChain: Found Leather provider');
-            const provider = window.LeatherProvider;
-            
-            const result = await provider.request('stx_requestAccounts');
-            console.log('TruthChain: Leather result:', result);
-            
-            if (result) {
-              let address = result;
-              if (result.addresses && Array.isArray(result.addresses)) {
-                address = result.addresses[0];
-              } else if (result.address) {
-                address = result.address;
-              }
-              
-              window.postMessage({
-                type: 'TRUTHCHAIN_WALLET_RESPONSE',
-                success: true,
-                walletData: {
-                  address: address,
-                  publicKey: result.publicKey || 'leather-key',
-                  provider: 'leather',
-                  walletName: 'Leather',
-                  isConnected: true
-                }
-              }, '*');
-              return;
-            }
-          }
-          
-          throw new Error('No Stacks wallet found');
-          
-        } catch (error) {
-          console.error('TruthChain: Wallet connection failed:', error);
-          window.postMessage({
-            type: 'TRUTHCHAIN_WALLET_RESPONSE',
-            success: false,
-            error: error.message
-          }, '*');
-        }
-      })();
-    `;
-    
-    document.head.appendChild(script);
-    document.head.removeChild(script);
-    
+    // Legacy injection removed - now using advanced page script communication
     // Timeout after 10 seconds
     setTimeout(() => {
       window.removeEventListener('message', messageListener);
@@ -1622,105 +1680,6 @@ async function connectWalletInPage() {
     }, 10000);
   });
 
-  // Original code kept as fallback
-  // Try Xverse first
-  if ((window as any).XverseProviders?.StacksProvider) {
-    try {
-      console.log('TruthChain: Connecting to Xverse...');
-      const provider = (window as any).XverseProviders.StacksProvider;
-      
-      const accounts = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Xverse accounts:', accounts);
-      
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No accounts available in Xverse');
-      }
-      
-      const addressInfo = await provider.request('stx_getAddresses');
-      console.log('TruthChain: Xverse address info:', addressInfo);
-      
-      if (!addressInfo?.addresses?.length) {
-        throw new Error('Could not get address information');
-      }
-      
-      return {
-        success: true,
-        wallet: {
-          address: addressInfo.addresses[0].address,
-          publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
-          provider: 'xverse',
-          walletName: 'Xverse',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Xverse connection failed:', error);
-      if (error.message?.includes('User rejected') || error.message?.includes('denied')) {
-        throw new Error('Connection cancelled by user');
-      }
-      // Try next wallet
-    }
-  }
-  
-  // Try Leather
-  if ((window as any).LeatherProvider) {
-    try {
-      console.log('TruthChain: Connecting to Leather...');
-      const provider = (window as any).LeatherProvider;
-      
-      const result = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Leather result:', result);
-      
-      if (!result) {
-        throw new Error('No response from Leather');
-      }
-      
-      let address = result;
-      if (result.addresses && Array.isArray(result.addresses)) {
-        address = result.addresses[0];
-      } else if (result.address) {
-        address = result.address;
-      }
-      
-      return {
-        success: true,
-        wallet: {
-          address: address,
-          publicKey: result.publicKey || 'leather-key',
-          provider: 'leather',
-          walletName: 'Leather',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Leather connection failed:', error);
-      // Try next wallet
-    }
-  }
-  
-  // Try generic Stacks provider
-  if ((window as any).StacksProvider) {
-    try {
-      console.log('TruthChain: Connecting to generic Stacks provider...');
-      const provider = (window as any).StacksProvider;
-      
-      const accounts = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Generic provider accounts:', accounts);
-      
-      return {
-        success: true,
-        wallet: {
-          address: Array.isArray(accounts) ? accounts[0] : accounts,
-          publicKey: 'stacks-key',
-          provider: 'stacks',
-          walletName: 'Stacks Wallet',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Generic provider connection failed:', error);
-    }
-  }
-  
+  // Legacy fallback code removed - now using advanced page script communication only
   throw new Error('No wallet providers found or all connections failed');
 }
