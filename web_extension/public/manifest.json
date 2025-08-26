@@ -26,7 +26,9 @@
     "https://*.blogspot.com/*",
     "https://*.google.com/*",
     "https://*.youtube.com/*",
-    "https://*.github.com/*"
+    "https://*.github.com/*",
+    "https://*.x.com/*",
+    "https://*.twitter.com/*"
   ],
   
   "background": {
@@ -50,11 +52,36 @@
         "https://*.blogspot.com/*",
         "https://*.google.com/*",
         "https://*.youtube.com/*",
-        "https://*.github.com/*"
+        "https://*.github.com/*",
+        "https://*.x.com/*",
+        "https://*.twitter.com/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*.medium.com/*",
+        "https://*.substack.com/*",
+        "https://*.dev.to/*",
+        "https://*.hashnode.com/*",
+        "https://*.mirror.xyz/*",
+        "https://*.linkedin.com/*",
+        "https://*.github.io/*",
+        "https://*.ghost.io/*",
+        "https://*.notion.site/*",
+        "https://*.wordpress.com/*",
+        "https://*.blogspot.com/*",
+        "https://*.google.com/*",
+        "https://*.youtube.com/*",
+        "https://*.github.com/*",
+        "https://*.x.com/*",
+        "https://*.twitter.com/*"
+      ],
+      "js": ["page-script.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   

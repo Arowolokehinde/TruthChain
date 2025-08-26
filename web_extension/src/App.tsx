@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import TruthChainUsernameManager, { type TruthChainUser } from './utils/username-manager'
 
 interface WalletState {
   isConnected: boolean;
   address: string | null;
   publicKey: string | null;
+  username?: string | null;
 }
 
 interface ContentState {
@@ -19,7 +21,8 @@ const App = () => {
   const [wallet, setWallet] = useState<WalletState>({
     isConnected: false,
     address: null,
-    publicKey: null
+    publicKey: null,
+    username: null
   });
   const [content, setContent] = useState<ContentState>({
     isProcessing: false,
@@ -31,17 +34,30 @@ const App = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState('');
+  const [showUsernameSetup, setShowUsernameSetup] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [currentUser, setCurrentUser] = useState<TruthChainUser | null>(null);
 
   useEffect(() => {
-    // Check if wallet is already connected
+    // Check if wallet is already connected and get username
     // @ts-ignore
-    chrome.storage.local.get(['walletData'], (result: { walletData?: any }) => {
+    chrome.storage.local.get(['walletData'], async (result: { walletData?: any }) => {
       if (result.walletData) {
         setWallet({
           isConnected: true,
           address: result.walletData.address,
-          publicKey: result.walletData.publicKey
+          publicKey: result.walletData.publicKey,
+          username: null
         });
+
+        // Check for existing username
+        const usernameManager = TruthChainUsernameManager.getInstance();
+        const user = await usernameManager.getUserByWallet(result.walletData.address);
+        if (user) {
+          setCurrentUser(user);
+          setWallet(prev => ({ ...prev, username: user.username }));
+        }
       }
     });
   }, []);
@@ -61,8 +77,23 @@ const App = () => {
             setWallet({
               isConnected: true,
               address: response.walletData.address,
-              publicKey: response.walletData.publicKey
+              publicKey: response.walletData.publicKey,
+              username: null
             });
+
+            // Check for existing username after wallet connection
+            const checkUsername = async () => {
+              const usernameManager = TruthChainUsernameManager.getInstance();
+              const user = await usernameManager.getUserByWallet(response.walletData.address);
+              if (user) {
+                setCurrentUser(user);
+                setWallet(prev => ({ ...prev, username: user.username }));
+              } else {
+                // Prompt for username creation
+                setShowUsernameSetup(true);
+              }
+            };
+            checkUsername();
             
             const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
             const network = response.walletData.network || 'testnet';
@@ -118,8 +149,67 @@ const App = () => {
   const disconnectWallet = () => {
     // @ts-ignore
     chrome.storage.local.remove(['walletData'], () => {
-      setWallet({ isConnected: false, address: null, publicKey: null });
+      setWallet({ isConnected: false, address: null, publicKey: null, username: null });
+      setCurrentUser(null);
+      setShowUsernameSetup(false);
     });
+  };
+
+  const createUsername = async () => {
+    if (!wallet.address || !usernameInput.trim()) {
+      setUsernameError('Username is required');
+      return;
+    }
+
+    setIsLoading(true);
+    setUsernameError('');
+
+    try {
+      const usernameManager = TruthChainUsernameManager.getInstance();
+      
+      // Validate format
+      const validation = usernameManager.validateUsernameFormat(usernameInput.trim());
+      if (!validation.isValid) {
+        setUsernameError(validation.error || 'Invalid username format');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create username
+      const user = await usernameManager.createUsername(usernameInput.trim(), wallet.address);
+      
+      setCurrentUser(user);
+      setWallet(prev => ({ ...prev, username: user.username }));
+      setShowUsernameSetup(false);
+      setUsernameInput('');
+      
+      alert(`🎉 Username Created Successfully!\n\n` +
+            `👤 Username: ${user.username}\n` +
+            `🔗 Tied to: ${wallet.address.slice(0, 12)}...${wallet.address.slice(-8)}\n\n` +
+            `✅ Your TruthChain identity is now ready!`);
+    } catch (error: any) {
+      console.error('Username creation failed:', error);
+      setUsernameError(error.message || 'Failed to create username');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkUsernameAvailability = async (username: string) => {
+    if (!username.trim()) return;
+    
+    try {
+      const usernameManager = TruthChainUsernameManager.getInstance();
+      const isAvailable = await usernameManager.checkUsernameAvailability(username.trim());
+      
+      if (!isAvailable) {
+        setUsernameError('Username is already taken');
+      } else {
+        setUsernameError('');
+      }
+    } catch (error) {
+      console.error('Username availability check failed:', error);
+    }
   };
 
   const registerContentOnTruthChain = () => {
@@ -286,6 +376,38 @@ const App = () => {
                     </div>
                   </div>
                   
+                  {/* Username Display or Setup */}
+                  {currentUser ? (
+                    <div className='bg-white/80 rounded-xl p-3 border border-slate-200/60 mb-3'>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-xs font-medium text-slate-500 uppercase tracking-wide'>TruthChain Username</span>
+                        <div className='flex items-center space-x-1'>
+                          <div className='w-2 h-2 bg-green-400 rounded-full'></div>
+                          <span className='text-xs text-green-600 font-medium'>Verified</span>
+                        </div>
+                      </div>
+                      <p className='font-semibold text-sm text-teal-700 bg-teal-50 rounded-lg p-2 border border-teal-200/50'>
+                        @{currentUser.username}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='bg-yellow-50 border border-yellow-200/60 rounded-xl p-3 mb-3'>
+                      <div className='flex items-center space-x-2 mb-2'>
+                        <div className='w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center'>
+                          <span className='text-xs text-white'>!</span>
+                        </div>
+                        <span className='text-xs font-semibold text-yellow-800'>Username Required</span>
+                      </div>
+                      <p className='text-xs text-yellow-700 mb-2'>Create a unique username to use TruthChain features</p>
+                      <button
+                        onClick={() => setShowUsernameSetup(true)}
+                        className='w-full bg-yellow-200 text-yellow-800 py-2 px-3 rounded-lg text-xs font-semibold hover:bg-yellow-300 transition-colors duration-200'
+                      >
+                        Create Username
+                      </button>
+                    </div>
+                  )}
+
                   <div className='bg-white/80 rounded-xl p-3 border border-slate-200/60'>
                     <div className='flex items-center justify-between mb-2'>
                       <span className='text-xs font-medium text-slate-500 uppercase tracking-wide'>STX Address</span>
@@ -545,6 +667,131 @@ const App = () => {
             </div>
           </div>
         </div>
+
+        {/* Username Setup Modal */}
+        {showUsernameSetup && (
+          <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+            <div className='bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200/60 overflow-hidden'>
+              {/* Header */}
+              <div className='bg-gradient-to-r from-teal-600 to-cyan-600 px-6 py-4'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center space-x-3'>
+                    <div className='w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center'>
+                      <span className='text-lg'>👤</span>
+                    </div>
+                    <div>
+                      <h3 className='text-lg font-bold text-white'>Create Username</h3>
+                      <p className='text-xs text-teal-100'>Your unique TruthChain identity</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowUsernameSetup(false);
+                      setUsernameInput('');
+                      setUsernameError('');
+                    }}
+                    className='text-white/80 hover:text-white p-1'
+                  >
+                    <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className='p-6 space-y-4'>
+                <div className='bg-blue-50 border border-blue-200/60 rounded-xl p-4'>
+                  <div className='flex items-start space-x-3'>
+                    <div className='w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+                      <svg className='w-3.5 h-3.5 text-white' fill='currentColor' viewBox='0 0 20 20'>
+                        <path fillRule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clipRule='evenodd' />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className='text-sm text-blue-800 font-semibold mb-1'>One-Time Setup</p>
+                      <p className='text-xs text-blue-700 leading-relaxed'>
+                        Your username will be permanently tied to your wallet address. Choose carefully - it cannot be changed later.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className='block text-sm font-semibold text-slate-700 mb-2'>
+                    Username
+                  </label>
+                  <div className='relative'>
+                    <input
+                      type='text'
+                      value={usernameInput}
+                      onChange={(e) => {
+                        setUsernameInput(e.target.value);
+                        setUsernameError('');
+                      }}
+                      onBlur={() => checkUsernameAvailability(usernameInput)}
+                      placeholder='Enter your username'
+                      className='w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm'
+                      maxLength={20}
+                    />
+                    <div className='absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400'>
+                      @
+                    </div>
+                  </div>
+                  {usernameError && (
+                    <p className='text-xs text-red-600 mt-1 flex items-center'>
+                      <svg className='w-3 h-3 mr-1' fill='currentColor' viewBox='0 0 20 20'>
+                        <path fillRule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z' clipRule='evenodd' />
+                      </svg>
+                      {usernameError}
+                    </p>
+                  )}
+                  <div className='text-xs text-slate-500 mt-1'>
+                    3-20 characters, letters, numbers, hyphens, underscores
+                  </div>
+                </div>
+
+                {/* Wallet Info */}
+                <div className='bg-slate-50 rounded-xl p-3 border border-slate-200/60'>
+                  <div className='flex items-center justify-between mb-1'>
+                    <span className='text-xs font-medium text-slate-600'>Wallet Address</span>
+                  </div>
+                  <p className='font-mono text-xs text-slate-700'>
+                    {wallet.address?.slice(0, 20)}...{wallet.address?.slice(-12)}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className='flex space-x-3 pt-2'>
+                  <button
+                    onClick={() => {
+                      setShowUsernameSetup(false);
+                      setUsernameInput('');
+                      setUsernameError('');
+                    }}
+                    className='flex-1 bg-slate-100 text-slate-700 py-3 px-4 rounded-xl font-semibold hover:bg-slate-200 transition-colors duration-200'
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createUsername}
+                    disabled={isLoading || !usernameInput.trim() || !!usernameError}
+                    className='flex-1 bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 transition-all duration-200'
+                  >
+                    {isLoading ? (
+                      <div className='flex items-center justify-center'>
+                        <div className='animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2'></div>
+                        Creating...
+                      </div>
+                    ) : (
+                      'Create Username'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

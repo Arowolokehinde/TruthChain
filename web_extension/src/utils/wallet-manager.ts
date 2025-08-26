@@ -38,9 +38,9 @@ export class WalletManager {
    * Get available wallet information
    */
   getAvailableWallets(): WalletInfo[] {
-    return [
+    const wallets: WalletInfo[] = [
       {
-        id: 'xverse',
+        id: 'xverse' as const,
         name: 'Xverse Wallet',
         isDetected: this.isXverseDetected(),
         isInstalled: this.isXverseDetected(),
@@ -48,14 +48,28 @@ export class WalletManager {
         priority: config.wallets.xverse.priority
       },
       {
-        id: 'leather',
+        id: 'leather' as const,
         name: 'Leather Wallet',
         isDetected: this.isLeatherDetected(),
         isInstalled: this.isLeatherDetected(),
         downloadUrl: 'https://leather.io/',
         priority: config.wallets.leather.priority
       }
-    ].sort((a, b) => a.priority - b.priority);
+    ];
+
+    // Add generic provider if available and no specific wallets found
+    if (!this.isXverseDetected() && !this.isLeatherDetected() && this.isGenericStacksDetected()) {
+      wallets.push({
+        id: 'generic' as const,
+        name: 'Stacks Wallet',
+        isDetected: this.isGenericStacksDetected(),
+        isInstalled: this.isGenericStacksDetected(),
+        downloadUrl: 'https://www.stacks.co/ecosystem/wallets',
+        priority: 99
+      });
+    }
+
+    return wallets.sort((a, b) => a.priority - b.priority);
   }
   
   /**
@@ -281,6 +295,15 @@ export class WalletManager {
   private isLeatherDetected(): boolean {
     try {
       // We can't directly access window from service worker, so we'll rely on content script reports
+      return true; // Will be determined by content script
+    } catch {
+      return false;
+    }
+  }
+
+  private isGenericStacksDetected(): boolean {
+    try {
+      // Check for generic Stacks provider (fallback)
       return true; // Will be determined by content script
     } catch {
       return false;

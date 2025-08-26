@@ -97,25 +97,53 @@ function injectTweetComposerButton() {
       
       verifyBtn.innerHTML = `
         <span style="margin-right: 6px;">🛡️</span>
-        <span>Register Tweet</span>
+        <span>TruthChain</span>
       `;
       
       verifyBtn.addEventListener('click', async () => {
         const content = await ContentDetector.extractContent();
         if (content.isComposing && content.content.trim()) {
-          chrome.runtime.sendMessage({ 
-            action: 'registerContent', 
-            contentData: content 
-          }, (response) => {
-            if (response.success) {
-              verifyBtn.innerHTML = `<span style="margin-right: 6px;">✅</span><span>Registered!</span>`;
-              verifyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-              setTimeout(() => {
-                verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>Register Tweet</span>`;
-                verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
-              }, 3000);
-            }
-          });
+          // Show use case prompt
+          const shouldRegister = confirm(
+            `🛡️ TruthChain Content Registration\n\n` +
+            `Would you like to upload this tweet on-chain?\n\n` +
+            `✅ Your content will be provably yours\n` +
+            `✅ Viewers can verify your tweet's origin and integrity\n` +
+            `✅ You build lasting trust with your audience\n\n` +
+            `Click OK to register on TruthChain blockchain.`
+          );
+          
+          if (shouldRegister) {
+            verifyBtn.innerHTML = `<span style="margin-right: 6px;">⏳</span><span>Registering...</span>`;
+            verifyBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            
+            chrome.runtime.sendMessage({ 
+              action: 'registerContent', 
+              contentData: content 
+            }, (response) => {
+              if (response.success) {
+                verifyBtn.innerHTML = `<span style="margin-right: 6px;">✅</span><span>Registered!</span>`;
+                verifyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                
+                // Show success notification
+                showSuccessNotification(response.data);
+                
+                setTimeout(() => {
+                  verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>TruthChain</span>`;
+                  verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
+                }, 5000);
+              } else {
+                verifyBtn.innerHTML = `<span style="margin-right: 6px;">❌</span><span>Failed</span>`;
+                verifyBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                alert('Registration failed: ' + (response.error || 'Unknown error'));
+                
+                setTimeout(() => {
+                  verifyBtn.innerHTML = `<span style="margin-right: 6px;">🛡️</span><span>TruthChain</span>`;
+                  verifyBtn.style.background = 'linear-gradient(135deg, #1d4ed8, #3b82f6)';
+                }, 3000);
+              }
+            });
+          }
         } else {
           alert('Please write your tweet first!');
         }
@@ -201,7 +229,7 @@ function addVerificationBadgeToTweet(tweetElement, verificationData) {
   
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
-    showVerificationDetails(verificationData);
+    showVerificationDetailsWithUsername(verificationData);
   });
   
   actionsBar.appendChild(badge);
@@ -316,10 +344,222 @@ function injectVerificationBadge(verificationData) {
   `;
 
   badge.addEventListener('click', () => {
-    showVerificationDetails(verificationData);
+    showVerificationDetailsWithUsername(verificationData);
   });
 
   document.body.appendChild(badge);
+}
+
+function showSuccessNotification(data: any) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10002;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    max-width: 350px;
+    animation: slideInRight 0.3s ease-out;
+  `;
+
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+      <div style="width: 20px; height: 20px; background: rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 8px;">
+        ✓
+      </div>
+      <strong>Tweet Registered on TruthChain!</strong>
+    </div>
+    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 8px;">
+      🔗 Hashed and saved in TruthChain database<br>
+      ⛓️ Registered with your wallet on Stacks blockchain<br>
+      🕐 Time-stamped for immutable proof
+    </div>
+    ${data.cid ? `<div style="font-size: 11px; font-family: monospace; background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 6px; margin-top: 8px;">CID: ${data.cid.slice(0, 20)}...</div>` : ''}
+  `;
+
+  // Add CSS animation
+  if (!document.querySelector('#truthchain-animations')) {
+    const style = document.createElement('style');
+    style.id = 'truthchain-animations';
+    style.textContent = `
+      @keyframes slideInRight {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(notification);
+
+  // Auto-remove after 8 seconds
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.animation = 'slideInRight 0.3s ease-out reverse';
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, 8000);
+}
+
+async function showVerificationDetailsWithUsername(data) {
+  // Create loading modal first
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  `;
+
+  modal.innerHTML = `
+    <div style="background: white; border-radius: 16px; padding: 32px; max-width: 520px; margin: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); position: relative;">
+      <div style="display: flex; align-items: center; justify-center; margin-bottom: 24px;">
+        <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      </div>
+      <div style="text-align: center; color: #6b7280; font-size: 16px;">
+        Verifying content authenticity...
+      </div>
+    </div>
+  `;
+
+  // Add spinner animation
+  if (!document.querySelector('#spinner-style')) {
+    const style = document.createElement('style');
+    style.id = 'spinner-style';
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(modal);
+
+  try {
+    // Get username from wallet address
+    let username = 'Unknown User';
+    if (data.owner) {
+      // Send message to background script to get username
+      chrome.runtime.sendMessage({ 
+        action: 'getUsernameByWallet', 
+        walletAddress: data.owner 
+      }, (response) => {
+        if (response?.success && response.username) {
+          username = response.username;
+        }
+        
+        // Update modal with verification details
+        showVerificationModal(modal, data, username);
+      });
+    } else {
+      showVerificationModal(modal, data, username);
+    }
+  } catch (error) {
+    console.error('Error loading verification details:', error);
+    showVerificationModal(modal, data, 'Unknown User');
+  }
+}
+
+function showVerificationModal(modal, data, username) {
+  modal.innerHTML = `
+    <div style="background: white; border-radius: 16px; padding: 0; max-width: 520px; margin: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); overflow: hidden;">
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 24px; position: relative;">
+        <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px;">×</button>
+        <div style="display: flex; align-items: center;">
+          <div style="width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 16px; font-size: 20px;">🛡️</div>
+          <div>
+            <h3 style="margin: 0; color: white; font-size: 22px; font-weight: bold;">Content Verified</h3>
+            <p style="margin: 4px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Blockchain proof of authenticity</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 24px;">
+        <!-- User Info -->
+        <div style="background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px;">@</div>
+            <div>
+              <h4 style="margin: 0; color: #065f46; font-size: 16px; font-weight: bold;">TruthChain Username</h4>
+              <p style="margin: 2px 0 0 0; color: #047857; font-size: 14px;">@${username}</p>
+            </div>
+          </div>
+          <p style="margin: 0; color: #064e3b; font-size: 13px;">
+            Click the badge to verify authenticity. Enter the username shown to confirm when and by whom it was registered.
+          </p>
+        </div>
+
+        <!-- Verification Details -->
+        <div style="space-y: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Wallet Owner</span>
+            <span style="color: #1f2937; font-size: 14px; font-family: monospace; background: #f9fafb; padding: 4px 8px; border-radius: 6px;">${data.owner ? data.owner.slice(0,12) + '...' + data.owner.slice(-8) : 'Unknown'}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Registration Date</span>
+            <span style="color: #1f2937; font-size: 14px;">${new Date(data.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Registration Time</span>
+            <span style="color: #1f2937; font-size: 14px;">${new Date(data.timestamp).toLocaleTimeString()}</span>
+          </div>
+          
+          ${data.txId ? `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500;">Transaction</span>
+            <a href="https://explorer.hiro.so/txid/${data.txId}?chain=testnet" target="_blank" style="color: #10b981; font-size: 14px; text-decoration: none; font-family: monospace; background: #f0fdfa; padding: 4px 8px; border-radius: 6px; border: 1px solid #a7f3d0;">${data.txId.slice(0,8)}...${data.txId.slice(-8)}</a>
+          </div>
+          ` : ''}
+          
+          ${data.cid ? `
+          <div style="display: flex; justify-content: space-between; align-items: start; padding: 12px 0;">
+            <span style="color: #6b7280; font-size: 14px; font-weight: 500; margin-top: 2px;">Content Hash</span>
+            <span style="color: #1f2937; font-size: 12px; font-family: monospace; background: #f9fafb; padding: 6px 8px; border-radius: 6px; max-width: 200px; word-break: break-all; line-height: 1.3;">${data.cid}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <!-- Actions -->
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
+          <div style="display: flex; gap: 12px;">
+            ${data.txId ? `
+            <button onclick="window.open('https://explorer.hiro.so/txid/${data.txId}?chain=testnet', '_blank')" style="flex: 1; background: #f3f4f6; color: #374151; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
+              View on Explorer
+            </button>
+            ` : ''}
+            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function showVerificationDetails(data) {
@@ -779,19 +1019,26 @@ setTimeout(() => {
   }
 }, 30000);
 
-// Enhanced message handling with improved wallet integration
+// Enhanced message handling with page script communication
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Content script received message:', request.action);
   
   switch (request.action) {
     case 'detectWallets':
-      const detection = detectWalletsEnhanced();
-      console.log('Wallet detection result:', detection);
-      sendResponse(detection);
-      break;
+      detectWalletsViaPageScript()
+        .then(result => {
+          console.log('Wallet detection result:', result);
+          sendResponse(result);
+        })
+        .catch(error => {
+          console.error('Wallet detection failed:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Keep message channel open for async response
       
     case 'connectWallet':
-      connectWalletEnhanced()
+    case 'connectXverse':
+      connectWalletViaPageScript()
         .then(result => {
           console.log('Wallet connection successful:', result);
           sendResponse(result);
@@ -813,58 +1060,312 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Enhanced wallet detection
-function detectWalletsEnhanced() {
-  const detected = {
-    available: [] as string[],
-    xverse: false,
-    leather: false,
-    stacks: false,
-    details: {} as Record<string, any>
-  };
-  
-  try {
-    // Check for Xverse with detailed info
-    if ((window as any).XverseProviders?.StacksProvider) {
-      detected.available.push('xverse');
-      detected.xverse = true;
-      detected.details.xverse = {
-        hasStacksProvider: true,
-        hasBitcoinProvider: !!(window as any).XverseProviders?.BitcoinProvider,
-        version: (window as any).XverseProviders?.version || 'unknown'
-      };
-    }
+// Page script communication functions
+let messageId = 0;
+const pendingMessages = new Map();
+
+function sendMessageToPageScript(type: string, data: any = {}): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const requestId = `req_${++messageId}_${Date.now()}`;
     
-    // Check for Leather with detailed info
-    if ((window as any).LeatherProvider) {
-      detected.available.push('leather');
-      detected.leather = true;
-      detected.details.leather = {
-        hasProvider: true,
-        version: (window as any).LeatherProvider?.version || 'unknown'
-      };
-    }
+    // Store the promise callbacks
+    pendingMessages.set(requestId, { resolve, reject });
     
-    // Check for generic Stacks provider
-    if ((window as any).StacksProvider && !(window as any).XverseProviders && !(window as any).LeatherProvider) {
-      detected.available.push('stacks');
-      detected.stacks = true;
-      detected.details.stacks = {
-        hasProvider: true,
-        isGeneric: true
-      };
-    }
+    // Send message to page script
+    window.postMessage({
+      type,
+      requestId,
+      ...data
+    }, '*');
     
-    // Store detection result globally
-    (window as any).__truthchain_wallets_detected = detected;
-    
-    console.log(`TruthChain: Enhanced detection found ${detected.available.length} wallet(s):`, detected.available);
-    
-  } catch (error) {
-    console.error('Enhanced wallet detection error:', error);
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (pendingMessages.has(requestId)) {
+        pendingMessages.delete(requestId);
+        reject(new Error('Timeout waiting for page script response'));
+      }
+    }, 10000);
+  });
+}
+
+// Listen for messages from page script
+window.addEventListener('message', (event) => {
+  // Only accept messages from same origin
+  if (event.origin !== window.location.origin) {
+    return;
   }
   
-  return detected;
+  // Only handle TruthChain responses
+  if (!event.data?.type?.startsWith('TRUTHCHAIN_') || !event.data.requestId) {
+    return;
+  }
+  
+  console.log('Content script received page script message:', event.data);
+  
+  const { requestId, success, data, error } = event.data;
+  
+  if (pendingMessages.has(requestId)) {
+    const { resolve, reject } = pendingMessages.get(requestId);
+    pendingMessages.delete(requestId);
+    
+    if (success) {
+      resolve(data);
+    } else {
+      reject(new Error(error || 'Unknown error'));
+    }
+  }
+});
+
+async function detectWalletsViaPageScript() {
+  try {
+    const detection = await sendMessageToPageScript('TRUTHCHAIN_DETECT_WALLETS');
+    
+    const result = {
+      available: [] as string[],
+      xverse: false,
+      leather: false,
+      stacks: false,
+      details: {} as Record<string, any>,
+      providers: detection.providers || {}
+    };
+    
+    // Process detection results
+    Object.entries(detection.providers || {}).forEach(([key, provider]: [string, any]) => {
+      if (provider.isDetected) {
+        result.available.push(key);
+        result[key as keyof typeof result] = true;
+        result.details[key] = {
+          name: provider.name,
+          isDetected: true,
+          hasProvider: !!provider.provider
+        };
+      }
+    });
+    
+    // Store detection result globally
+    (window as any).__truthchain_wallets_detected = result;
+    
+    console.log(`TruthChain: Page script detection found ${result.available.length} wallet(s):`, result.available);
+    
+    return result;
+  } catch (error) {
+    console.error('Page script wallet detection failed:', error);
+    
+    // Fallback to legacy detection
+    return detectWalletsEnhanced();
+  }
+}
+
+async function connectWalletViaPageScript() {
+  try {
+    const detection = await detectWalletsViaPageScript();
+    
+    if (detection.available.length === 0) {
+      throw new Error('No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.');
+    }
+    
+    // Try connecting to available wallets in priority order
+    const connectionOrder = ['xverse', 'leather', 'stacks'];
+    let lastError: Error | null = null;
+    
+    for (const walletType of connectionOrder) {
+      if (detection.available.includes(walletType)) {
+        try {
+          console.log(`TruthChain: Attempting page script connection to ${walletType}`);
+          
+          const result = await sendMessageToPageScript('TRUTHCHAIN_ADVANCED_CONNECT', {
+            provider: walletType
+          });
+          
+          if (result.success) {
+            // Store successful connection globally
+            (window as any).__truthchain_connected_wallet = result;
+            
+            return result;
+          }
+          
+        } catch (error) {
+          lastError = error as Error;
+          console.log(`Page script connection attempt to ${walletType} failed:`, error);
+          
+          // If user explicitly rejected, don't try other wallets
+          if (error.message?.toLowerCase().includes('user rejected') || 
+              error.message?.toLowerCase().includes('denied') ||
+              error.message?.toLowerCase().includes('cancelled')) {
+            throw new Error('Connection cancelled by user');
+          }
+        }
+      }
+    }
+    
+    throw lastError || new Error('All wallet connections failed');
+    
+  } catch (error) {
+    console.error('Page script wallet connection failed:', error);
+    
+    // Fallback to legacy connection
+    return connectWalletEnhanced();
+  }
+}
+
+// Enhanced wallet detection - use page script communication
+async function detectWalletsEnhanced() {
+  console.log('TruthChain: Using advanced page script detection...');
+  
+  try {
+    // Try advanced detection first
+    const advancedResult = await new Promise<any>((resolve, reject) => {
+      const requestId = `enhanced_detect_${Date.now()}`;
+      
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'TRUTHCHAIN_ADVANCED_DETECT_RESULT' && 
+            event.data.requestId === requestId) {
+          window.removeEventListener('message', responseHandler);
+          
+          if (event.data.success) {
+            resolve(event.data.data);
+          } else {
+            reject(new Error(event.data.error));
+          }
+        }
+      };
+      
+      window.addEventListener('message', responseHandler);
+      
+      window.postMessage({
+        type: 'TRUTHCHAIN_ADVANCED_DETECT',
+        requestId: requestId
+      }, '*');
+      
+      setTimeout(() => {
+        window.removeEventListener('message', responseHandler);
+        reject(new Error('Advanced detection timeout'));
+      }, 5000);
+    });
+    
+    // Convert advanced format to legacy format
+    const detected = {
+      available: [] as string[],
+      xverse: false,
+      leather: false,
+      stacks: false,
+      details: {} as Record<string, any>
+    };
+    
+    console.log(`TruthChain: [CONVERSION] Converting ${advancedResult.length} advanced results:`, advancedResult);
+    
+    // Ensure priority order: xverse first, then leather, then stacks
+    const priorityOrder = ['xverse', 'leather', 'stacks'];
+    const detectedWallets = new Set<string>();
+    
+    for (const wallet of advancedResult) {
+      if (wallet.detected) {
+        const providerKey = wallet.provider.includes('-') ? wallet.provider.split('-')[0] : wallet.provider;
+        detectedWallets.add(providerKey);
+        
+        console.log(`TruthChain: [CONVERSION] Processing wallet: ${wallet.name} (${providerKey})`);
+        
+        if (providerKey === 'xverse') {
+          detected.xverse = true;
+          detected.details.xverse = {
+            hasStacksProvider: true,
+            version: wallet.version || 'unknown',
+            methods: wallet.methods || []
+          };
+        } else if (providerKey === 'leather') {
+          detected.leather = true;
+          detected.details.leather = {
+            hasProvider: true,
+            version: wallet.version || 'unknown',
+            methods: wallet.methods || []
+          };
+        } else if (providerKey === 'stacks') {
+          detected.stacks = true;
+          detected.details.stacks = {
+            hasProvider: true,
+            isGeneric: true,
+            methods: wallet.methods || []
+          };
+        }
+      }
+    }
+    
+    // Build available array in priority order
+    for (const walletType of priorityOrder) {
+      if (detectedWallets.has(walletType)) {
+        detected.available.push(walletType);
+        console.log(`TruthChain: [CONVERSION] Added ${walletType} to available array at position ${detected.available.length - 1}`);
+      }
+    }
+    
+    console.log(`TruthChain: [CONVERSION] Final available array:`, detected.available);
+    
+    console.log(`TruthChain: Advanced detection found ${detected.available.length} wallet(s):`, detected.available);
+    console.log(`TruthChain: [DEBUG] Full detection result:`, detected);
+    return detected;
+    
+  } catch (error) {
+    console.log('TruthChain: Advanced detection failed, falling back to legacy:', error);
+    
+    // Fallback to legacy detection via page script
+    return new Promise((resolve) => {
+      const requestId = `legacy_detect_${Date.now()}`;
+      
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'TRUTHCHAIN_WALLET_DETECTION_RESULT' && 
+            event.data.requestId === requestId) {
+          window.removeEventListener('message', responseHandler);
+          
+          if (event.data.success) {
+            const providers = event.data.data.providers;
+            const detected = {
+              available: [] as string[],
+              xverse: false,
+              leather: false,
+              stacks: false,
+              details: {} as Record<string, any>
+            };
+            
+            Object.entries(providers).forEach(([key, provider]: [string, any]) => {
+              if (provider.isDetected) {
+                detected.available.push(key);
+                detected[key as keyof typeof detected] = true;
+                detected.details[key] = { hasProvider: true };
+              }
+            });
+            
+            resolve(detected);
+          } else {
+            resolve({
+              available: [],
+              xverse: false,
+              leather: false,
+              stacks: false,
+              details: {}
+            });
+          }
+        }
+      };
+      
+      window.addEventListener('message', responseHandler);
+      
+      window.postMessage({
+        type: 'TRUTHCHAIN_DETECT_WALLETS',
+        requestId: requestId
+      }, '*');
+      
+      setTimeout(() => {
+        window.removeEventListener('message', responseHandler);
+        resolve({
+          available: [],
+          xverse: false,
+          leather: false,
+          stacks: false,
+          details: {}
+        });
+      }, 3000);
+    });
+  }
 }
 
 // Enhanced wallet connection with better error handling
@@ -874,7 +1375,7 @@ async function connectWalletEnhanced(): Promise<any> {
   // Wait a moment for wallet providers to fully initialize
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  const detection = detectWalletsEnhanced();
+  const detection = await detectWalletsEnhanced();
   
   if (detection.available.length === 0) {
     throw new Error(
@@ -882,52 +1383,86 @@ async function connectWalletEnhanced(): Promise<any> {
     );
   }
   
-  // Try connecting to wallets in priority order
-  const connectionAttempts = [];
-  
-  if (detection.xverse) {
-    connectionAttempts.push(() => connectXverseEnhanced());
-  }
-  
-  if (detection.leather) {
-    connectionAttempts.push(() => connectLeatherEnhanced());
-  }
-  
-  if (detection.stacks) {
-    connectionAttempts.push(() => connectGenericEnhanced());
-  }
-  
+  // Try connecting to wallets in priority order using advanced page script
+  const walletPriority = ['xverse', 'leather', 'stacks'];
   let lastError: Error | null = null;
   
-  for (const [index, attemptConnection] of connectionAttempts.entries()) {
+  console.log(`TruthChain: [CONNECTION] Available wallets from detection:`, detection.available);
+  console.log(`TruthChain: [CONNECTION] Wallet priority order:`, walletPriority);
+  
+  for (const walletType of walletPriority) {
+    console.log(`TruthChain: [CONNECTION] Checking wallet: ${walletType}, available: ${detection.available.includes(walletType)}`);
+    
+    if (!detection.available.includes(walletType)) {
+      console.log(`TruthChain: [CONNECTION] Skipping ${walletType} - not in available list`);
+      continue;
+    }
+    
     try {
-      console.log(`TruthChain: Attempting connection ${index + 1}/${connectionAttempts.length}`);
-      const result = await attemptConnection();
+      console.log(`TruthChain: Attempting advanced connection to ${walletType}`);
+      
+      const result = await new Promise<any>((resolve, reject) => {
+        const requestId = `enhanced_connect_${walletType}_${Date.now()}`;
+        
+        const responseHandler = (event: MessageEvent) => {
+          if (event.data?.type === 'TRUTHCHAIN_ADVANCED_CONNECT_RESULT' && 
+              event.data.requestId === requestId) {
+            window.removeEventListener('message', responseHandler);
+            
+            if (event.data.success) {
+              resolve(event.data.data);
+            } else {
+              reject(new Error(event.data.error));
+            }
+          }
+        };
+        
+        window.addEventListener('message', responseHandler);
+        
+        window.postMessage({
+          type: 'TRUTHCHAIN_ADVANCED_CONNECT',
+          requestId: requestId,
+          provider: walletType
+        }, '*');
+        
+        setTimeout(() => {
+          window.removeEventListener('message', responseHandler);
+          reject(new Error('Advanced connection timeout'));
+        }, 30000);
+      });
       
       // Store successful connection globally for other scripts
       (window as any).__truthchain_connected_wallet = result;
       
       return {
         success: true,
-        walletData: result.walletData,
+        walletData: {
+          address: result.address,
+          publicKey: result.publicKey,
+          provider: result.provider,
+          walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1),
+          isConnected: true,
+          network: result.network || 'testnet'
+        },
         provider: result.provider,
-        walletName: result.walletName
+        walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1)
       };
       
     } catch (error) {
       lastError = error as Error;
-      console.log(`Connection attempt ${index + 1} failed:`, error.message);
+      console.log(`Advanced connection to ${walletType} failed:`, (error as Error).message);
       
       // If user explicitly rejected, don't try other wallets
-      if (error.message?.toLowerCase().includes('user rejected') || 
-          error.message?.toLowerCase().includes('denied') ||
-          error.message?.toLowerCase().includes('cancelled')) {
-        throw new Error('Connection cancelled by user');
+      if ((error as Error).message?.toLowerCase().includes('user rejected') || 
+          (error as Error).message?.toLowerCase().includes('denied') ||
+          (error as Error).message?.toLowerCase().includes('cancelled') ||
+          (error as Error).message?.toLowerCase().includes('timeout')) {
+        throw new Error(`Connection cancelled: ${(error as Error).message}`);
       }
     }
   }
   
-  throw lastError || new Error('All wallet connections failed');
+  throw lastError || new Error('All advanced wallet connections failed');
 }
 
 // Enhanced Xverse connection
@@ -1137,89 +1672,7 @@ async function connectWalletInPage() {
     
     window.addEventListener('message', messageListener);
     
-    // Inject wallet connection script into page
-    const script = document.createElement('script');
-    script.textContent = `
-      (async function() {
-        try {
-          console.log('TruthChain: Injected script running...');
-          
-          // Try Xverse first
-          if (window.XverseProviders?.StacksProvider) {
-            console.log('TruthChain: Found Xverse provider');
-            const provider = window.XverseProviders.StacksProvider;
-            
-            const accounts = await provider.request('stx_requestAccounts');
-            console.log('TruthChain: Xverse accounts:', accounts);
-            
-            if (accounts && accounts.length > 0) {
-              const addressInfo = await provider.request('stx_getAddresses');
-              console.log('TruthChain: Xverse addresses:', addressInfo);
-              
-              if (addressInfo?.addresses?.length) {
-                window.postMessage({
-                  type: 'TRUTHCHAIN_WALLET_RESPONSE',
-                  success: true,
-                  walletData: {
-                    address: addressInfo.addresses[0].address,
-                    publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
-                    provider: 'xverse',
-                    walletName: 'Xverse',
-                    isConnected: true
-                  }
-                }, '*');
-                return;
-              }
-            }
-          }
-          
-          // Try Leather
-          if (window.LeatherProvider) {
-            console.log('TruthChain: Found Leather provider');
-            const provider = window.LeatherProvider;
-            
-            const result = await provider.request('stx_requestAccounts');
-            console.log('TruthChain: Leather result:', result);
-            
-            if (result) {
-              let address = result;
-              if (result.addresses && Array.isArray(result.addresses)) {
-                address = result.addresses[0];
-              } else if (result.address) {
-                address = result.address;
-              }
-              
-              window.postMessage({
-                type: 'TRUTHCHAIN_WALLET_RESPONSE',
-                success: true,
-                walletData: {
-                  address: address,
-                  publicKey: result.publicKey || 'leather-key',
-                  provider: 'leather',
-                  walletName: 'Leather',
-                  isConnected: true
-                }
-              }, '*');
-              return;
-            }
-          }
-          
-          throw new Error('No Stacks wallet found');
-          
-        } catch (error) {
-          console.error('TruthChain: Wallet connection failed:', error);
-          window.postMessage({
-            type: 'TRUTHCHAIN_WALLET_RESPONSE',
-            success: false,
-            error: error.message
-          }, '*');
-        }
-      })();
-    `;
-    
-    document.head.appendChild(script);
-    document.head.removeChild(script);
-    
+    // Legacy injection removed - now using advanced page script communication
     // Timeout after 10 seconds
     setTimeout(() => {
       window.removeEventListener('message', messageListener);
@@ -1227,105 +1680,6 @@ async function connectWalletInPage() {
     }, 10000);
   });
 
-  // Original code kept as fallback
-  // Try Xverse first
-  if ((window as any).XverseProviders?.StacksProvider) {
-    try {
-      console.log('TruthChain: Connecting to Xverse...');
-      const provider = (window as any).XverseProviders.StacksProvider;
-      
-      const accounts = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Xverse accounts:', accounts);
-      
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No accounts available in Xverse');
-      }
-      
-      const addressInfo = await provider.request('stx_getAddresses');
-      console.log('TruthChain: Xverse address info:', addressInfo);
-      
-      if (!addressInfo?.addresses?.length) {
-        throw new Error('Could not get address information');
-      }
-      
-      return {
-        success: true,
-        wallet: {
-          address: addressInfo.addresses[0].address,
-          publicKey: addressInfo.addresses[0].publicKey || 'xverse-key',
-          provider: 'xverse',
-          walletName: 'Xverse',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Xverse connection failed:', error);
-      if (error.message?.includes('User rejected') || error.message?.includes('denied')) {
-        throw new Error('Connection cancelled by user');
-      }
-      // Try next wallet
-    }
-  }
-  
-  // Try Leather
-  if ((window as any).LeatherProvider) {
-    try {
-      console.log('TruthChain: Connecting to Leather...');
-      const provider = (window as any).LeatherProvider;
-      
-      const result = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Leather result:', result);
-      
-      if (!result) {
-        throw new Error('No response from Leather');
-      }
-      
-      let address = result;
-      if (result.addresses && Array.isArray(result.addresses)) {
-        address = result.addresses[0];
-      } else if (result.address) {
-        address = result.address;
-      }
-      
-      return {
-        success: true,
-        wallet: {
-          address: address,
-          publicKey: result.publicKey || 'leather-key',
-          provider: 'leather',
-          walletName: 'Leather',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Leather connection failed:', error);
-      // Try next wallet
-    }
-  }
-  
-  // Try generic Stacks provider
-  if ((window as any).StacksProvider) {
-    try {
-      console.log('TruthChain: Connecting to generic Stacks provider...');
-      const provider = (window as any).StacksProvider;
-      
-      const accounts = await provider.request('stx_requestAccounts');
-      console.log('TruthChain: Generic provider accounts:', accounts);
-      
-      return {
-        success: true,
-        wallet: {
-          address: Array.isArray(accounts) ? accounts[0] : accounts,
-          publicKey: 'stacks-key',
-          provider: 'stacks',
-          walletName: 'Stacks Wallet',
-          isConnected: true
-        }
-      };
-    } catch (error) {
-      console.error('TruthChain: Generic provider connection failed:', error);
-    }
-  }
-  
+  // Legacy fallback code removed - now using advanced page script communication only
   throw new Error('No wallet providers found or all connections failed');
 }
