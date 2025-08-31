@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Xverse Connection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Xverse Wallet Connection Test</h1>
+        <p>This page will help test the connection to your Xverse wallet extension.</p>
+        
+        <div>
+            <button onclick="runDiagnostic()">🔍 Run Wallet Diagnostic</button>
+            <button onclick="testXverseConnection()">🚀 Test Xverse Connection</button>
+            <button onclick="testDirectConnection()">⚡ Test Direct Connection</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Wait for page to load and wallets to inject
+        let diagnosticResults = {};
+        
+        function addResult(type, title, content) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${title}</strong>\n${content}`;
+            results.appendChild(div);
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        function runDiagnostic() {
+            addResult('info', '🔍 Running Diagnostic...', 'Checking for wallet providers...');
+            
+            try {
+                // First check if extension scripts loaded
+                const extensionStatus = {
+                    truthchainDiagnostic: typeof window.__truthchain_diagnose_wallets,
+                    truthchainDetector: typeof window.__truthchain_advanced_detector,
+                    extensionScriptsLoaded: typeof window.__truthchain_diagnose_wallets === 'function'
+                };
+                
+                addResult('info', '🔧 Extension Status', JSON.stringify(extensionStatus, null, 2));
+                
+                // Check ALL window properties for debugging
+                const allProps = Object.getOwnPropertyNames(window);
+                const walletProps = allProps.filter(prop => {
+                    const lowerProp = prop.toLowerCase();
+                    return lowerProp.includes('xverse') || 
+                           lowerProp.includes('leather') || 
+                           lowerProp.includes('stacks') ||
+                           lowerProp.includes('wallet') ||
+                           lowerProp.includes('provider') ||
+                           lowerProp.includes('truthchain');
+                });
+                
+                addResult('info', '🔍 All Wallet/Extension Properties', walletProps.join(', ') || 'None found');
+                
+                // Check if TruthChain diagnostic is available
+                if (window.__truthchain_diagnose_wallets) {
+                    const result = window.__truthchain_diagnose_wallets();
+                    diagnosticResults = result;
+                    addResult('success', '✅ TruthChain Diagnostic Complete', JSON.stringify(result, null, 2));
+                } else {
+                    addResult('error', '❌ TruthChain Extension Not Loaded', 
+                        'Extension scripts are not loaded on this page.\n\n' +
+                        'This could mean:\n' +
+                        '• Extension not installed/enabled\n' +
+                        '• File:// URL not supported\n' +
+                        '• Content script permissions issue\n\n' +
+                        'Try testing on https://google.com instead'
+                    );
+                    
+                    // Manual diagnostic
+                    const manualDiagnostic = {
+                        xverseProviders: window.XverseProviders,
+                        xverseProvidersLower: window.xverseProviders,
+                        stacksProvider: window.stacksProvider,
+                        xverseProvider: window.xverseProvider,
+                        leatherProvider: window.LeatherProvider,
+                        genericStacksProvider: window.StacksProvider,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        location: window.location.href
+                    };
+                    
+                    addResult('info', 'ℹ️ Manual Diagnostic (Extension Not Loaded)', JSON.stringify(manualDiagnostic, null, 2));
+                    
+                    // Check what we found
+                    const found = [];
+                    if (window.XverseProviders) found.push('XverseProviders');
+                    if (window.xverseProviders) found.push('xverseProviders');
+                    if (window.stacksProvider) found.push('stacksProvider');
+                    if (window.xverseProvider) found.push('xverseProvider');
+                    if (window.LeatherProvider) found.push('LeatherProvider');
+                    if (window.StacksProvider) found.push('StacksProvider');
+                    
+                    addResult(found.length > 0 ? 'success' : 'error', 
+                        found.length > 0 ? '✅ Found Providers (Without Extension)' : '❌ No Providers Found', 
+                        found.length > 0 ? found.join(', ') : 'No wallet providers detected. Make sure Xverse is installed and unlocked.'
+                    );
+                }
+            } catch (error) {
+                addResult('error', '❌ Diagnostic Failed', error.message);
+            }
+        }
+        
+        async function testXverseConnection() {
+            addResult('info', '🚀 Testing Xverse Connection...', 'Attempting to connect to Xverse wallet...');
+            
+            try {
+                // Try multiple Xverse patterns
+                let xverseProvider = null;
+                const patterns = [
+                    () => window.XverseProviders?.StacksProvider,
+                    () => window.xverseProviders?.StacksProvider,
+                    () => window.stacksProvider,
+                    () => window.xverseProvider,
+                ];
+                
+                for (let i = 0; i < patterns.length; i++) {
+                    try {
+                        const provider = patterns[i]();
+                        if (provider && typeof provider.request === 'function') {
+                            xverseProvider = provider;
+                            addResult('success', `✅ Found Xverse Provider (Pattern ${i + 1})`, `Provider found using pattern: ${patterns[i].toString()}`);
+                            break;
+                        }
+                    } catch (e) {
+                        // Continue to next pattern
+                    }
+                }
+                
+                if (!xverseProvider) {
+                    throw new Error('Xverse provider not found. Please make sure Xverse wallet extension is installed and enabled.');
+                }
+                
+                // Request accounts
+                addResult('info', '🔑 Requesting Accounts...', 'Calling stx_requestAccounts - popup should appear...');
+                
+                const accounts = await xverseProvider.request('stx_requestAccounts');
+                addResult('success', '✅ Accounts Retrieved', JSON.stringify(accounts, null, 2));
+                
+                // Get address info
+                try {
+                    const addressInfo = await xverseProvider.request('stx_getAddresses');
+                    addResult('success', '✅ Address Info Retrieved', JSON.stringify(addressInfo, null, 2));
+                    
+                    if (addressInfo?.addresses?.length > 0) {
+                        const address = addressInfo.addresses[0].address;
+                        addResult('success', '🎉 Connection Successful!', 
+                            `Your Stacks Address: ${address}\n\nYou can now use this address with TruthChain!`
+                        );
+                    }
+                } catch (addressError) {
+                    addResult('info', 'ℹ️ Address Info Failed', 'Could not get detailed address info, but connection successful');
+                }
+                
+            } catch (error) {
+                addResult('error', '❌ Connection Failed', `Error: ${error.message}\n\nTroubleshooting:\n• Make sure Xverse wallet is unlocked\n• Check if popup was blocked\n• Try refreshing the page`);
+            }
+        }
+        
+        async function testDirectConnection() {
+            addResult('info', '⚡ Testing Direct Connection...', 'Using direct XverseProviders approach...');
+            
+            try {
+                if (!window.XverseProviders || !window.XverseProviders.StacksProvider) {
+                    throw new Error('XverseProviders.StacksProvider not found');
+                }
+                
+                const provider = window.XverseProviders.StacksProvider;
+                addResult('success', '✅ Direct Provider Found', 'XverseProviders.StacksProvider is available');
+                
+                const accounts = await provider.request('stx_requestAccounts');
+                addResult('success', '✅ Direct Connection Success', JSON.stringify(accounts, null, 2));
+                
+                const addressInfo = await provider.request('stx_getAddresses');
+                addResult('success', '✅ Direct Address Info', JSON.stringify(addressInfo, null, 2));
+                
+            } catch (error) {
+                addResult('error', '❌ Direct Connection Failed', error.message);
+            }
+        }
+        
+        // Auto-run diagnostic on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                addResult('info', '🔄 Page Loaded', 'Waiting 2 seconds for wallet providers to inject...');
+                setTimeout(runDiagnostic, 2000);
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

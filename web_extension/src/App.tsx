@@ -66,9 +66,69 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      console.log('TruthChain: Attempting @stacks/connect with wallet provider detection...');
+      console.log('TruthChain: Attempting direct wallet connection...');
       
-      // First check what wallets are actually detected via our content script
+      // Try direct connection first (bypasses @stacks/connect modal issues)
+      try {
+        // @ts-ignore
+        const directResult = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ action: 'connectWallet' }, (response) => {
+            console.log('TruthChain: Direct wallet connection result:', response);
+            if (response && response.success) {
+              resolve(response);
+            } else {
+              reject(new Error(response?.error || 'Direct connection failed'));
+            }
+          });
+        });
+        
+        const result = directResult as any;
+        if (result.success && result.walletData) {
+          const walletData = result.walletData;
+          
+          setWallet({
+            isConnected: true,
+            address: walletData.address,
+            publicKey: walletData.publicKey,
+            username: null
+          });
+
+          // Store wallet data for persistence
+          // @ts-ignore
+          chrome.storage.local.set({ walletData });
+
+          // Check for existing username after wallet connection
+          const checkUsername = async () => {
+            const usernameManager = TruthChainUsernameManager.getInstance();
+            const user = await usernameManager.getUserByWallet(walletData.address);
+            if (user) {
+              setCurrentUser(user);
+              setWallet(prev => ({ ...prev, username: user.username }));
+            } else {
+              setShowUsernameSetup(true);
+            }
+          };
+          checkUsername();
+          
+          alert(
+            `🎉 ${walletData.walletName} Connected Successfully!\n\n` +
+            `📍 Address: ${walletData.address.slice(0, 12)}...${walletData.address.slice(-8)}\n` +
+            `🌐 Network: ${walletData.network}\n` +
+            `🔗 Provider: ${walletData.provider}\n\n` +
+            `✅ Ready for TruthChain operations!`
+          );
+          
+          setIsLoading(false);
+          return; // Success - exit early
+        }
+      } catch (directError) {
+        console.log('TruthChain: Direct connection failed, trying @stacks/connect fallback:', directError);
+      }
+      
+      // Fallback to @stacks/connect if direct connection fails
+      console.log('TruthChain: Attempting @stacks/connect fallback...');
+      
+      // First check what wallets are detected
       // @ts-ignore
       const detectionResult = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: 'detectWallets' }, (response) => {
@@ -86,8 +146,6 @@ const App = () => {
         // Ignore disconnect errors
       }
       
-      console.log('TruthChain: Showing @stacks/connect modal');
-      
       // Show helpful message about using installed wallets
       const walletInfo = detectionResult as any;
       if (walletInfo?.xverse || walletInfo?.leather) {
@@ -96,17 +154,16 @@ const App = () => {
         if (walletInfo.leather) installedWallets.push('Leather');
         
         alert(
-          `🎯 Installed Wallets Detected!\n\n` +
+          `🔄 Trying Backup Connection Method\n\n` +
           `Found: ${installedWallets.join(', ')}\n\n` +
           `💡 In the modal that appears:\n` +
-          `• If you see "Install" instead of "Connect"\n` +
-          `• Click on your wallet (${installedWallets[0]}) anyway\n` +
-          `• It will connect to your installed wallet\n\n` +
-          `This is a known display issue with the modal.`
+          `• Click on "${installedWallets[0]}" even if it says "Install"\n` +
+          `• Your installed wallet will connect properly\n` +
+          `• This is a known display bug in the modal`
         );
       }
       
-      // Use @stacks/connect modal  
+      // Use @stacks/connect modal as fallback
       const response = await connect();
       
       console.log('TruthChain: @stacks/connect response:', response);
@@ -131,6 +188,10 @@ const App = () => {
           publicKey: walletData.publicKey,
           username: null
         });
+
+        // Store wallet data for persistence
+        // @ts-ignore
+        chrome.storage.local.set({ walletData });
 
         // Check for existing username after wallet connection
         const checkUsername = async () => {
@@ -160,33 +221,28 @@ const App = () => {
       setIsLoading(false);
       
     } catch (error) {
-      console.error('Direct @stacks/connect error:', error);
+      console.error('All wallet connection methods failed:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       
       if (errorMsg.includes('No wallet') || errorMsg.includes('not found') || errorMsg.includes('install')) {
         alert(
-          '🔗 Stacks Wallet Required\n\n' +
-          'TruthChain supports these Stacks wallets:\n\n' +
-          '🥇 Xverse Wallet (Recommended)\n' +
-          '   → Chrome Web Store → Search "Xverse Wallet"\n' +
-          '   → Supports Bitcoin + Stacks\n\n' +
-          '🥈 Leather Wallet (Hiro)\n' +
-          '   → Visit leather.io or hiro.so\n' +
-          '   → Full Stacks ecosystem support\n\n' +
-          'Setup Instructions:\n' +
-          '1. Install your preferred wallet\n' +
-          '2. Create or restore your account\n' +
-          '3. Make sure the wallet is unlocked\n' +
-          '4. Refresh this extension\n' +
-          '5. Try connecting again\n\n' +
-          'Need testnet STX? Visit stacks.co/testnet-faucet'
+          '🔗 Wallet Connection Issue\n\n' +
+          'Your Xverse wallet is installed but not detected.\n\n' +
+          'Quick Fix:\n' +
+          '1. Make sure Xverse is unlocked\n' +
+          '2. Refresh this extension popup\n' +
+          '3. Try clicking "Connect Wallet" again\n\n' +
+          'If issue persists:\n' +
+          '• Disable and re-enable Xverse extension\n' +
+          '• Restart Chrome browser\n' +
+          '• Check if Xverse has any pending updates'
         );
       } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
         alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
       } else if (errorMsg.includes('timeout')) {
         alert('⏱️ Connection Timeout\n\nWallet connection timed out.\n\nTroubleshooting:\n• Make sure your wallet is unlocked\n• Check for wallet popup windows\n• Try refreshing the page\n• Restart your wallet extension');
       } else {
-        alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure wallet is unlocked\n• Check wallet permissions\n• Refresh the page and try again\n• Restart browser if needed`);
+        alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure Xverse is unlocked\n• Check wallet permissions\n• Refresh the extension popup\n• Restart browser if needed`);
       }
       setIsLoading(false);
     }

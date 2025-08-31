@@ -106,6 +106,14 @@ class AdvancedWalletDetector {
   private performDetection() {
     const results: WalletDetectionResult[] = [];
     
+    // Debug: Log current window state
+    if (this.detectionAttempts % 10 === 0) { // Every 10th attempt
+      console.log(`TruthChain: Detection attempt ${this.detectionAttempts}, checking window properties...`);
+      console.log('TruthChain: window.XverseProviders =', (window as any).XverseProviders);
+      console.log('TruthChain: window.LeatherProvider =', (window as any).LeatherProvider);
+      console.log('TruthChain: window.StacksProvider =', (window as any).StacksProvider);
+    }
+    
     // Method 1: Direct window object detection
     results.push(this.detectXverseDirect());
     results.push(this.detectLeatherDirect());
@@ -140,6 +148,34 @@ class AdvancedWalletDetector {
 
   private detectXverseDirect(): WalletDetectionResult {
     try {
+      // Check multiple patterns for Xverse injection
+      const patterns = [
+        () => (window as any).XverseProviders?.StacksProvider,
+        () => (window as any).xverseProviders?.StacksProvider,
+        () => (window as any).stacksProvider, // Some versions use this
+        () => (window as any).xverseProvider,
+      ];
+      
+      for (const pattern of patterns) {
+        try {
+          const provider = pattern();
+          if (provider && typeof provider === 'object') {
+            console.log('TruthChain: Found Xverse provider via pattern:', provider);
+            return {
+              name: 'Xverse Wallet',
+              provider: 'xverse',
+              detected: true,
+              available: true,
+              version: provider.version || 'unknown',
+              methods: Object.getOwnPropertyNames(provider)
+            };
+          }
+        } catch (e) {
+          // Continue to next pattern
+        }
+      }
+      
+      // Check for classic XverseProviders
       const xverse = (window as any).XverseProviders;
       if (xverse && xverse.StacksProvider) {
         return {
@@ -228,25 +264,56 @@ class AdvancedWalletDetector {
       
       console.log('TruthChain: Found wallet-related properties:', walletProps);
       
+      // Also check for common wallet-related descriptors
+      const descriptors = Object.getOwnPropertyDescriptors(window);
+      const walletDescriptors = Object.keys(descriptors).filter(prop => {
+        const lowerProp = prop.toLowerCase();
+        return lowerProp.includes('xverse') || lowerProp.includes('leather') || lowerProp.includes('stacks');
+      });
+      
+      if (walletDescriptors.length > 0) {
+        console.log('TruthChain: Found wallet descriptors:', walletDescriptors);
+      }
+      
       for (const prop of walletProps) {
         try {
           const obj = (window as any)[prop];
           if (obj && typeof obj === 'object') {
-            if (prop.toLowerCase().includes('xverse') && obj.StacksProvider) {
-              results.push({
-                name: 'Xverse (Property Enumeration)',
-                provider: 'xverse-enum',
-                detected: true,
-                available: true,
-                version: obj.version
-              });
-            } else if (prop.toLowerCase().includes('leather') && obj.request) {
+            console.log(`TruthChain: Examining property ${prop}:`, Object.keys(obj));
+            
+            // Enhanced Xverse detection
+            if (prop.toLowerCase().includes('xverse')) {
+              if (obj.StacksProvider || (typeof obj.request === 'function')) {
+                results.push({
+                  name: 'Xverse (Property Enumeration)',
+                  provider: 'xverse-enum',
+                  detected: true,
+                  available: true,
+                  version: obj.version || 'unknown',
+                  methods: Object.getOwnPropertyNames(obj)
+                });
+              }
+            } 
+            // Enhanced Leather detection
+            else if (prop.toLowerCase().includes('leather') && obj.request) {
               results.push({
                 name: 'Leather (Property Enumeration)',
                 provider: 'leather-enum',
                 detected: true,
                 available: true,
-                version: obj.version
+                version: obj.version || 'unknown',
+                methods: Object.getOwnPropertyNames(obj)
+              });
+            }
+            // Generic Stacks provider
+            else if (prop.toLowerCase().includes('stacks') && obj.request) {
+              results.push({
+                name: 'Stacks (Property Enumeration)',
+                provider: 'stacks-enum',
+                detected: true,
+                available: true,
+                version: obj.version || 'unknown',
+                methods: Object.getOwnPropertyNames(obj)
               });
             }
           }
@@ -364,16 +431,37 @@ class AdvancedWalletDetector {
   // Modern APIs removed for simplicity - using direct XverseProviders only
 
   private async connectXverseLegacy(): Promise<WalletConnectionResult> {
-    console.log(`TruthChain: [XVERSE] Using legacy XverseProviders method`);
+    console.log(`TruthChain: [XVERSE] Using enhanced XverseProviders method`);
     
-    const xverse = (window as any).XverseProviders?.StacksProvider;
-    console.log(`TruthChain: [XVERSE] Legacy provider available:`, !!xverse);
+    // Try multiple provider patterns for Xverse
+    let xverse: any = null;
+    const patterns = [
+      () => (window as any).XverseProviders?.StacksProvider,
+      () => (window as any).xverseProviders?.StacksProvider,
+      () => (window as any).stacksProvider,
+      () => (window as any).xverseProvider,
+    ];
+    
+    for (const pattern of patterns) {
+      try {
+        const provider = pattern();
+        if (provider && typeof provider === 'object' && typeof provider.request === 'function') {
+          xverse = provider;
+          console.log(`TruthChain: [XVERSE] Found working provider pattern:`, pattern.toString());
+          break;
+        }
+      } catch (e) {
+        // Continue to next pattern
+      }
+    }
+    
+    console.log(`TruthChain: [XVERSE] Provider available:`, !!xverse);
     
     if (!xverse) {
       throw new Error('Xverse wallet not found. Please install Xverse extension and refresh the page.');
     }
 
-    console.log(`TruthChain: [XVERSE] Calling legacy stx_requestAccounts - this should trigger popup`);
+    console.log(`TruthChain: [XVERSE] Calling stx_requestAccounts - this should trigger popup`);
     
     try {
       const accounts = await Promise.race([
@@ -383,21 +471,30 @@ class AdvancedWalletDetector {
         )
       ]) as string[];
 
-      console.log(`TruthChain: [XVERSE] Legacy accounts response:`, accounts);
+      console.log(`TruthChain: [XVERSE] Accounts response:`, accounts);
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No Xverse accounts available - please unlock your wallet');
       }
 
-      const addressInfo = await xverse.request('stx_getAddresses');
-      console.log(`TruthChain: [XVERSE] Legacy address info:`, addressInfo);
-      
-      if (!addressInfo?.addresses?.length) {
-        throw new Error('Could not get address from Xverse');
+      // Try to get detailed address info
+      let primaryAddress: any;
+      try {
+        const addressInfo = await xverse.request('stx_getAddresses');
+        console.log(`TruthChain: [XVERSE] Address info:`, addressInfo);
+        
+        if (addressInfo?.addresses?.length) {
+          primaryAddress = addressInfo.addresses[0];
+        } else {
+          // Fallback: use first account as address
+          primaryAddress = { address: accounts[0] };
+        }
+      } catch (addressError) {
+        console.log(`TruthChain: [XVERSE] Address info failed, using account directly:`, addressError);
+        primaryAddress = { address: accounts[0] };
       }
-
-      const primaryAddress = addressInfo.addresses[0];
-      console.log(`TruthChain: [XVERSE] Legacy connection successful! Address:`, primaryAddress.address);
+      
+      console.log(`TruthChain: [XVERSE] Connection successful! Address:`, primaryAddress.address);
 
       return {
         success: true,
@@ -407,7 +504,7 @@ class AdvancedWalletDetector {
         network: 'mainnet'
       };
     } catch (error) {
-      console.error(`TruthChain: [XVERSE] Legacy connection failed:`, error);
+      console.error(`TruthChain: [XVERSE] Connection failed:`, error);
       throw error;
     }
   }
@@ -657,6 +754,52 @@ window.addEventListener('message', async (event) => {
 
 // Export for debugging
 (window as any).__truthchain_advanced_detector = advancedWalletDetector;
+
+// Add manual diagnostic function
+(window as any).__truthchain_diagnose_wallets = function() {
+  console.log('=== TruthChain Wallet Diagnostic ===');
+  console.log('Current timestamp:', new Date().toISOString());
+  
+  // Check all possible Xverse locations
+  console.log('1. Xverse Locations:');
+  console.log('  - window.XverseProviders:', (window as any).XverseProviders);
+  console.log('  - window.xverseProviders:', (window as any).xverseProviders);
+  console.log('  - window.stacksProvider:', (window as any).stacksProvider);
+  console.log('  - window.xverseProvider:', (window as any).xverseProvider);
+  
+  // Check Leather
+  console.log('2. Leather Locations:');
+  console.log('  - window.LeatherProvider:', (window as any).LeatherProvider);
+  console.log('  - window.leatherProvider:', (window as any).leatherProvider);
+  
+  // Check generic Stacks
+  console.log('3. Generic Stacks:');
+  console.log('  - window.StacksProvider:', (window as any).StacksProvider);
+  
+  // Get all wallet-related window properties
+  const allProps = Object.getOwnPropertyNames(window);
+  const walletProps = allProps.filter(prop => {
+    const lowerProp = prop.toLowerCase();
+    return lowerProp.includes('xverse') || lowerProp.includes('leather') || lowerProp.includes('stacks') || lowerProp.includes('wallet');
+  });
+  
+  console.log('4. All wallet-related window properties:', walletProps);
+  
+  // Check current detection state
+  console.log('5. Current Advanced Detector State:');
+  const detected = advancedWalletDetector.getDetectedWallets();
+  console.log('  - Detected wallets:', detected);
+  
+  console.log('===================================');
+  
+  return {
+    xverseProviders: (window as any).XverseProviders,
+    leatherProvider: (window as any).LeatherProvider,
+    stacksProvider: (window as any).StacksProvider,
+    allWalletProps: walletProps,
+    detectedWallets: detected
+  };
+};
 
 // Set up automatic detection updates
 advancedWalletDetector.onDetection((detectedWallets: WalletDetectionResult[]) => {

@@ -28,7 +28,9 @@
     "https://*.youtube.com/*",
     "https://*.github.com/*",
     "https://*.x.com/*",
-    "https://*.twitter.com/*"
+    "https://*.twitter.com/*",
+    "file:///*",
+    "<all_urls>"
   ],
   
   "background": {
@@ -54,7 +56,10 @@
         "https://*.youtube.com/*",
         "https://*.github.com/*",
         "https://*.x.com/*",
-        "https://*.twitter.com/*"
+        "https://*.twitter.com/*",
+        "file:///*",
+        "http://*/*",
+        "https://*/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle",
@@ -77,7 +82,10 @@
         "https://*.youtube.com/*",
         "https://*.github.com/*",
         "https://*.x.com/*",
-        "https://*.twitter.com/*"
+        "https://*.twitter.com/*",
+        "file:///*",
+        "http://*/*",
+        "https://*/*"
       ],
       "js": ["page-script.js"],
       "run_at": "document_start",
