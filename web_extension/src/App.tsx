@@ -39,6 +39,7 @@ const App = () => {
   const [usernameInput, setUsernameInput] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [currentUser, setCurrentUser] = useState<TruthChainUser | null>(null);
+  const [showDebugMode, setShowDebugMode] = useState(false);
 
   useEffect(() => {
     // Check if wallet is already connected and get username
@@ -139,16 +140,21 @@ const App = () => {
       } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
         alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
       } else if (errorMsg.includes('All connection methods failed')) {
+        // Enable debug mode for advanced troubleshooting
+        setShowDebugMode(true);
         alert(
           '🔧 Advanced Troubleshooting Required\n\n' +
-          'All connection methods failed. This indicates:\n\n' +
-          '• Xverse extension may not be properly installed\n' +
-          '• Browser security settings blocking wallet injection\n' +
+          'All connection methods failed. Debug mode is now enabled.\n\n' +
+          '• Check the "Wallet Debug Info" section below\n' +
+          '• Click "Run Provider Diagnostics" for detailed analysis\n\n' +
+          'Common issues:\n' +
+          '• Xverse extension not properly installed\n' +
+          '• Browser security blocking wallet injection\n' +
           '• Extension conflicts in Chrome\n\n' +
           'Solutions:\n' +
-          '1. Try in Chrome Incognito mode\n' +
+          '1. Try Chrome Incognito mode\n' +
           '2. Disable other wallet extensions temporarily\n' +
-          '3. Check Chrome console for error messages\n' +
+          '3. Check provider diagnostics below\n' +
           '4. Consider using Leather wallet as alternative'
         );
       } else {
@@ -222,6 +228,40 @@ const App = () => {
     } catch (error) {
       console.error('Username availability check failed:', error);
     }
+  };
+
+  const runWalletDiagnostics = async () => {
+    console.log('🔍 TruthChain: Running comprehensive wallet diagnostics...');
+    
+    // Run professional wallet connector diagnostics
+    professionalWalletConnector.debugProviderInjection();
+    
+    // Detect available wallets
+    const walletStatus = await professionalWalletConnector.detectWallets();
+    console.log('Wallet Detection Results:', walletStatus);
+    
+    // Display results to user
+    const results = [
+      `🔍 WALLET DIAGNOSTIC RESULTS`,
+      ``,
+      `Available Wallets: ${walletStatus.available.length === 0 ? 'None detected' : walletStatus.available.join(', ')}`,
+      `Xverse Provider: ${walletStatus.xverse ? 'Detected' : 'Not Found'}`,
+      `Leather Provider: ${walletStatus.leather ? 'Detected' : 'Not Found'}`,
+      ``,
+      `Chrome Version: ${navigator.userAgent.includes('Chrome') ? navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'Unknown' : 'Not Chrome'}`,
+      ``,
+      `📋 Next Steps:`,
+      walletStatus.available.length === 0 
+        ? '• Install Xverse or Leather wallet extension\n• Make sure wallet is unlocked\n• Refresh this page after installation'
+        : '• Check browser console (F12) for detailed logs\n• Try connecting again\n• If issues persist, try incognito mode',
+      ``,
+      `⚠️ If problems continue, this may indicate:`,
+      `• Extension conflicts with other wallet extensions`,
+      `• Chrome security settings blocking injection`,
+      `• Extension needs browser restart to activate properly`
+    ].join('\n');
+    
+    alert(results);
   };
 
   const registerContentOnTruthChain = () => {
@@ -624,6 +664,82 @@ const App = () => {
                 </div>
               )}
             </div>
+
+          {/* Debug Section - Shows when wallet connection fails */}
+          {showDebugMode && !wallet.isConnected && (
+            <div className='bg-gradient-to-br from-orange-50 to-yellow-50 border border-orange-200/60 rounded-xl overflow-hidden'>
+              <div className='bg-orange-100/60 px-4 py-3 border-b border-orange-200/50'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center space-x-2'>
+                    <svg className='w-4 h-4 text-orange-600' fill='currentColor' viewBox='0 0 20 20'>
+                      <path fillRule='evenodd' d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z' clipRule='evenodd' />
+                    </svg>
+                    <span className='text-sm font-semibold text-orange-800'>Wallet Debug Mode</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDebugMode(false)}
+                    className='text-orange-600 hover:text-orange-700 p-1'
+                  >
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className='p-4 space-y-4'>
+                <p className='text-orange-700 text-sm'>
+                  <strong>Debug mode enabled</strong> - Use these tools to diagnose wallet connection issues specific to your setup.
+                </p>
+                
+                <div className='space-y-3'>
+                  <button
+                    onClick={runWalletDiagnostics}
+                    className='w-full bg-orange-200 text-orange-800 py-3 px-4 rounded-lg font-semibold hover:bg-orange-300 transition-colors duration-200 flex items-center justify-center'
+                  >
+                    <svg className='w-4 h-4 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' />
+                    </svg>
+                    Run Provider Diagnostics
+                  </button>
+                  
+                  <div className='bg-white/80 rounded-lg p-3 border border-orange-200/60'>
+                    <h4 className='text-sm font-semibold text-orange-800 mb-2'>Your Configuration:</h4>
+                    <div className='space-y-1 text-xs'>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Chrome Version:</span>
+                        <span className='text-orange-600 font-mono'>{navigator.userAgent.includes('Chrome') ? navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'Unknown' : 'Not Chrome'}</span>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Expected Xverse:</span>
+                        <span className='text-orange-600 font-mono'>v1.3.0+</span>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Detection Methods:</span>
+                        <span className='text-orange-600 font-mono'>3 fallbacks</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-3'>
+                    <div className='flex items-start space-x-2'>
+                      <div className='w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+                        <span className='text-xs text-white font-bold'>!</span>
+                      </div>
+                      <div>
+                        <p className='text-sm text-yellow-800 font-semibold'>Troubleshooting Tips:</p>
+                        <ul className='text-xs text-yellow-700 mt-1 space-y-1'>
+                          <li>• Check browser console (F12) for detailed logs</li>
+                          <li>• Ensure Xverse is unlocked and not just installed</li>
+                          <li>• Try disabling other wallet extensions temporarily</li>
+                          <li>• Test in Chrome incognito mode</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Read-Only Info */}
           {!wallet.isConnected && (
