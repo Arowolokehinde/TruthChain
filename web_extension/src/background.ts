@@ -102,10 +102,10 @@ async function handleWalletDetection(): Promise<any> {
     }
     
     // Check if it's a valid URL for injection
-    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('edge://')) {
       return {
         success: false,
-        error: 'Cannot detect wallets on special browser pages',
+        error: 'Wallet detection unavailable on browser internal pages. Please navigate to a regular website (like medium.com or any other site) and try connecting your wallet again.',
         available: [],
         xverse: false,
         leather: false,
@@ -130,7 +130,8 @@ async function handleWalletDetection(): Promise<any> {
     
     // Fallback response if no wallets detected
     return {
-      success: true,
+      success: false,
+      error: 'No Stacks wallets detected. Please ensure Xverse or Leather wallet is installed and unlocked, then refresh this page.',
       available: [],
       xverse: false,
       leather: false,

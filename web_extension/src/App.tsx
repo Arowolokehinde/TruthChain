@@ -126,37 +126,53 @@ const App = () => {
       
       if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
         alert(
-          '🔗 Wallet Detection Issue\n\n' +
-          'TruthChain uses advanced detection methods but couldn\'t find Xverse.\n\n' +
-          '✅ Professional Troubleshooting:\n' +
-          '1. Ensure Xverse wallet is installed from Chrome Web Store\n' +
-          '2. Make sure Xverse is UNLOCKED (not just installed)\n' +
-          '3. Refresh this page: chrome://extensions/\n' +
-          '4. Disable/re-enable Xverse extension\n' +
-          '5. Restart Chrome completely\n\n' +
-          '⚠️ Note: Xverse extension is in beta and may have detection issues.\n' +
-          'If problems persist, try using Leather wallet instead.'
+          '🔗 No Stacks Wallets Found\n\n' +
+          'TruthChain couldn\'t detect any Stacks wallets in your browser.\n\n' +
+          '✅ Quick Solutions:\n' +
+          '1. Install Xverse or Leather wallet from Chrome Web Store\n' +
+          '2. Make sure your wallet is UNLOCKED\n' +
+          '3. Navigate to a regular website (like medium.com) and try again\n' +
+          '4. Refresh the current page\n\n' +
+          '⚠️ Note: Wallet detection doesn\'t work on chrome:// pages.\n' +
+          'Please visit a regular website first, then open this popup.'
         );
       } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
         alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
       } else if (errorMsg.includes('All connection methods failed')) {
-        // Enable debug mode for advanced troubleshooting
-        setShowDebugMode(true);
-        alert(
-          '🔧 Advanced Troubleshooting Required\n\n' +
-          'All connection methods failed. Debug mode is now enabled.\n\n' +
-          '• Check the "Wallet Debug Info" section below\n' +
-          '• Click "Run Provider Diagnostics" for detailed analysis\n\n' +
-          'Common issues:\n' +
-          '• Xverse extension not properly installed\n' +
-          '• Browser security blocking wallet injection\n' +
-          '• Extension conflicts in Chrome\n\n' +
-          'Solutions:\n' +
-          '1. Try Chrome Incognito mode\n' +
-          '2. Disable other wallet extensions temporarily\n' +
-          '3. Check provider diagnostics below\n' +
-          '4. Consider using Leather wallet as alternative'
-        );
+        // Check if this is because we're on a restricted page
+        if (errorMsg.includes('browser internal pages') || errorMsg.includes('chrome://') || errorMsg.includes('extension://')) {
+          alert(
+            '🚫 Restricted Page Detection\n\n' +
+            'Wallet detection is disabled on browser internal pages.\n\n' +
+            '✅ Simple Solution:\n' +
+            '1. Open a new tab and visit any regular website\n' +
+            '   (like medium.com, twitter.com, or google.com)\n' +
+            '2. Open TruthChain popup from that tab\n' +
+            '3. Connect your wallet\n\n' +
+            '⚠️ Browser security prevents wallet access on:\n' +
+            '• chrome:// pages (settings, extensions, etc.)\n' +
+            '• extension:// pages\n' +
+            '• New tab pages'
+          );
+        } else {
+          // Enable debug mode for advanced troubleshooting
+          setShowDebugMode(true);
+          alert(
+            '🔧 Advanced Troubleshooting Required\n\n' +
+            'All connection methods failed. Debug mode is now enabled.\n\n' +
+            '• Check the "Wallet Debug Info" section below\n' +
+            '• Click "Run Provider Diagnostics" for detailed analysis\n\n' +
+            'Common issues:\n' +
+            '• Wallet extension not properly installed\n' +
+            '• Browser security blocking wallet injection\n' +
+            '• Extension conflicts in Chrome\n\n' +
+            'Solutions:\n' +
+            '1. Try Chrome Incognito mode\n' +
+            '2. Disable other wallet extensions temporarily\n' +
+            '3. Check provider diagnostics below\n' +
+            '4. Install Xverse or Leather wallet'
+          );
+        }
       } else {
         alert(`❌ Connection Error\n\nError: ${errorMsg}\n\nThis is a technical issue. Please:\n• Check browser console for details\n• Report to TruthChain support if persistent`);
       }

@@ -379,7 +379,7 @@ class AdvancedWalletDetector {
   }
 
   public getDetectedWallets(): WalletDetectionResult[] {
-    return Array.from(this.detected.values()).filter(w => w.detected);
+    return Array.from(this.detected.values()).filter(w => w.detected && w.available);
   }
 
   public async connectWallet(providerType: string): Promise<WalletConnectionResult> {
@@ -387,8 +387,9 @@ class AdvancedWalletDetector {
     console.log(`TruthChain: [CONNECT] Current detected wallets:`, Array.from(this.detected.entries()));
     
     const detected = this.detected.get(providerType);
-    if (!detected || !detected.detected) {
-      console.error(`TruthChain: [CONNECT] ${providerType} not in detected list or not detected`);
+    if (!detected || !detected.detected || !detected.available) {
+      console.error(`TruthChain: [CONNECT] ${providerType} not in detected list or not detected/available`);
+      console.error(`TruthChain: [CONNECT] Wallet status:`, detected ? {detected: detected.detected, available: detected.available} : 'not found');
       throw new Error(`Wallet provider ${providerType} not detected`);
     }
     
@@ -510,44 +511,96 @@ class AdvancedWalletDetector {
   }
 
   private async connectLeather(): Promise<WalletConnectionResult> {
+    console.log(`TruthChain: [LEATHER] Starting Leather connection`);
     const leather = (window as any).LeatherProvider;
     if (!leather) {
       throw new Error('Leather provider not available');
     }
 
-    const result = await Promise.race([
-      leather.request('stx_requestAccounts'),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 30000)
-      )
-    ]);
+    console.log(`TruthChain: [LEATHER] Leather provider found, requesting accounts...`);
+    
+    try {
+      // Try multiple Leather API methods in order of preference
+      let result;
+      
+      console.log(`TruthChain: [LEATHER] Available methods:`, Object.getOwnPropertyNames(leather));
+      
+      try {
+        // Method 1: Try stx_requestAccounts (standard)
+        console.log(`TruthChain: [LEATHER] Trying stx_requestAccounts method`);
+        result = await Promise.race([
+          leather.request('stx_requestAccounts', null),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+          )
+        ]);
+      } catch (firstError) {
+        console.log(`TruthChain: [LEATHER] stx_requestAccounts failed, trying getAddresses:`, firstError);
+        
+        try {
+          // Method 2: Try getAddresses (Leather-specific)
+          result = await Promise.race([
+            leather.request('getAddresses', null),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+            )
+          ]);
+        } catch (secondError) {
+          console.log(`TruthChain: [LEATHER] getAddresses failed, trying stx_getAddresses:`, secondError);
+          
+          // Method 3: Try stx_getAddresses
+          result = await Promise.race([
+            leather.request('stx_getAddresses', null),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+            )
+          ]);
+        }
+      }
 
-    if (!result) {
-      throw new Error('No response from Leather');
+      console.log(`TruthChain: [LEATHER] Raw result from Leather:`, result);
+
+      if (!result) {
+        throw new Error('No response from Leather');
+      }
+
+      let address: string;
+      let publicKey = `leather-${Date.now()}`;
+
+      if (typeof result === 'string') {
+        address = result;
+      } else if ((result as any).addresses && Array.isArray((result as any).addresses)) {
+        address = (result as any).addresses[0];
+        publicKey = (result as any).publicKey || publicKey;
+      } else if ((result as any).address) {
+        address = (result as any).address;
+        publicKey = (result as any).publicKey || publicKey;
+      } else {
+        throw new Error('Invalid response format');
+      }
+
+      console.log(`TruthChain: [LEATHER] Successfully connected, address: ${address}`);
+
+      return {
+        success: true,
+        provider: 'leather',
+        address,
+        publicKey,
+        network: 'testnet'
+      };
+      
+    } catch (error) {
+      console.error(`TruthChain: [LEATHER] Connection failed:`, error);
+      
+      // Check if it's a JSON-RPC error and provide more details
+      if (error && typeof error === 'object' && 'error' in error) {
+        const rpcError = (error as any).error;
+        console.error(`TruthChain: [LEATHER] RPC Error Details:`, rpcError);
+        throw new Error(`Leather RPC Error: ${rpcError.message || 'Unknown error'} (Code: ${rpcError.code || 'N/A'})`);
+      }
+      
+      throw error;
     }
-
-    let address: string;
-    let publicKey = `leather-${Date.now()}`;
-
-    if (typeof result === 'string') {
-      address = result;
-    } else if ((result as any).addresses && Array.isArray((result as any).addresses)) {
-      address = (result as any).addresses[0];
-      publicKey = (result as any).publicKey || publicKey;
-    } else if ((result as any).address) {
-      address = (result as any).address;
-      publicKey = (result as any).publicKey || publicKey;
-    } else {
-      throw new Error('Invalid response format');
-    }
-
-    return {
-      success: true,
-      provider: 'leather',
-      address,
-      publicKey,
-      network: 'testnet'
-    };
   }
 
   private async connectGenericStacks(): Promise<WalletConnectionResult> {
@@ -588,11 +641,12 @@ function detectWalletProviders(): LegacyWalletDetectionResult {
   const providers: Record<string, WalletProviderInfo> = {};
   
   // Convert advanced detection results to legacy format
+  // Only include wallets that are both detected AND available
   for (const wallet of detectedWallets) {
     const key = wallet.provider.includes('-') ? wallet.provider.split('-')[0] : wallet.provider;
     providers[key] = {
       name: wallet.name,
-      isDetected: wallet.detected,
+      isDetected: wallet.detected && wallet.available, // Must be both detected and available
       provider: wallet
     };
   }

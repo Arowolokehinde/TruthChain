@@ -36,47 +36,84 @@ export class WalletManager {
   
   /**
    * Get available wallet information
+   * This method returns the basic structure - real detection happens via content script
    */
   getAvailableWallets(): WalletInfo[] {
     const wallets: WalletInfo[] = [
       {
         id: 'xverse' as const,
         name: 'Xverse Wallet',
-        isDetected: this.isXverseDetected(),
-        isInstalled: this.isXverseDetected(),
+        isDetected: false, // Will be updated by real detection
+        isInstalled: false, // Will be updated by real detection
         downloadUrl: 'https://chrome.google.com/webstore/detail/xverse-wallet/idnnbdplmphgjfnlezmnbdbpnpfggjjs',
         priority: config.wallets.xverse.priority
       },
       {
         id: 'leather' as const,
         name: 'Leather Wallet',
-        isDetected: this.isLeatherDetected(),
-        isInstalled: this.isLeatherDetected(),
+        isDetected: false, // Will be updated by real detection
+        isInstalled: false, // Will be updated by real detection
         downloadUrl: 'https://leather.io/',
         priority: config.wallets.leather.priority
-      }
-    ];
-
-    // Add generic provider if available and no specific wallets found
-    if (!this.isXverseDetected() && !this.isLeatherDetected() && this.isGenericStacksDetected()) {
-      wallets.push({
+      },
+      {
         id: 'generic' as const,
         name: 'Stacks Wallet',
-        isDetected: this.isGenericStacksDetected(),
-        isInstalled: this.isGenericStacksDetected(),
+        isDetected: false, // Will be updated by real detection
+        isInstalled: false, // Will be updated by real detection
         downloadUrl: 'https://www.stacks.co/ecosystem/wallets',
         priority: 99
-      });
-    }
+      }
+    ];
 
     return wallets.sort((a, b) => a.priority - b.priority);
   }
   
   /**
    * Check if any supported wallets are detected
+   * Note: This method returns false since service workers can't detect wallets directly
+   * Real detection must be done via background script + content script communication
    */
   hasDetectedWallets(): boolean {
-    return this.isXverseDetected() || this.isLeatherDetected();
+    return false; // Real detection happens via content script
+  }
+
+  /**
+   * Detect available wallets via background script communication
+   */
+  async detectAvailableWallets(): Promise<{
+    success: boolean;
+    available: string[];
+    xverse: boolean;
+    leather: boolean;
+    stacks: boolean;
+    details?: Record<string, any>;
+    error?: string;
+  }> {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'detectWallets' }, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            success: false,
+            available: [],
+            xverse: false,
+            leather: false,
+            stacks: false,
+            error: chrome.runtime.lastError.message
+          });
+          return;
+        }
+        
+        resolve(response || {
+          success: false,
+          available: [],
+          xverse: false,
+          leather: false,
+          stacks: false,
+          error: 'No response from background script'
+        });
+      });
+    });
   }
   
   /**
@@ -282,33 +319,6 @@ export class WalletManager {
     };
   }
   
-  // Private helper methods
-  private isXverseDetected(): boolean {
-    try {
-      // We can't directly access window from service worker, so we'll rely on content script reports
-      return true; // Will be determined by content script
-    } catch {
-      return false;
-    }
-  }
-  
-  private isLeatherDetected(): boolean {
-    try {
-      // We can't directly access window from service worker, so we'll rely on content script reports
-      return true; // Will be determined by content script
-    } catch {
-      return false;
-    }
-  }
-
-  private isGenericStacksDetected(): boolean {
-    try {
-      // Check for generic Stacks provider (fallback)
-      return true; // Will be determined by content script
-    } catch {
-      return false;
-    }
-  }
   
   private storeWalletConnection(walletData: any): void {
     chrome.storage.local.set({
