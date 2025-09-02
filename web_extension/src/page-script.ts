@@ -517,66 +517,183 @@ class AdvancedWalletDetector {
       throw new Error('Leather provider not available');
     }
 
-    console.log(`TruthChain: [LEATHER] Leather provider found, requesting accounts...`);
+    console.log(`TruthChain: [LEATHER] Leather provider found:`, typeof leather, !!leather.request);
+    console.log(`TruthChain: [LEATHER] Available methods:`, Object.getOwnPropertyNames(leather));
+    
+    // Enhanced debugging - check if Leather is actually loaded and ready
+    console.log(`TruthChain: [LEATHER] Leather object details:`, {
+      hasRequest: typeof leather.request === 'function',
+      isObject: typeof leather === 'object',
+      keys: Object.keys(leather),
+      prototype: Object.getPrototypeOf(leather)
+    });
     
     try {
-      // Try multiple Leather API methods in order of preference
+      // Use the documented Leather wallet API method: getAddresses
+      // According to Leather documentation, this is the official method to get addresses
+      console.log(`TruthChain: [LEATHER] Attempting connection using official getAddresses method...`);
+      
       let result;
-      
-      console.log(`TruthChain: [LEATHER] Available methods:`, Object.getOwnPropertyNames(leather));
-      
       try {
-        // Method 1: Try stx_requestAccounts (standard)
-        console.log(`TruthChain: [LEATHER] Trying stx_requestAccounts method`);
-        result = await Promise.race([
-          leather.request('stx_requestAccounts', null),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
-          )
-        ]);
-      } catch (firstError) {
-        console.log(`TruthChain: [LEATHER] stx_requestAccounts failed, trying getAddresses:`, firstError);
+        // Call the official Leather getAddresses method 
+        console.log(`TruthChain: [LEATHER] Calling getAddresses method`);
+        const connectPromise = leather.request('getAddresses');
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout after 20 seconds')), 20000)
+        );
         
+        result = await Promise.race([connectPromise, timeoutPromise]);
+        console.log(`TruthChain: [LEATHER] getAddresses response:`, result);
+        
+      } catch (addressError) {
+        console.log(`TruthChain: [LEATHER] getAddresses failed, trying alternative approaches:`, addressError);
+        
+        // Check if it's a user rejection or wallet locked error
+        if (addressError && typeof addressError === 'object') {
+          const errorObj = addressError as any;
+          if (errorObj.error) {
+            const rpcError = errorObj.error;
+            if (rpcError.code === -32002) {
+              throw new Error('User rejected the connection request. Please try connecting again and approve the request in Leather wallet.');
+            } else if (rpcError.code === -32603 || rpcError.message?.includes('locked')) {
+              throw new Error('Leather wallet appears to be locked. Please unlock your Leather wallet and try again.');
+            }
+          }
+        }
+        
+        // If getAddresses failed, try direct account access
         try {
-          // Method 2: Try getAddresses (Leather-specific)
-          result = await Promise.race([
-            leather.request('getAddresses', null),
+          console.log(`TruthChain: [LEATHER] Trying direct account access`);
+          const accountResult = await Promise.race([
+            leather.request('accounts'),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+              setTimeout(() => reject(new Error('Account access timeout')), 15000)
             )
           ]);
-        } catch (secondError) {
-          console.log(`TruthChain: [LEATHER] getAddresses failed, trying stx_getAddresses:`, secondError);
           
-          // Method 3: Try stx_getAddresses
-          result = await Promise.race([
-            leather.request('stx_getAddresses', null),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
-            )
-          ]);
+          console.log(`TruthChain: [LEATHER] accounts response:`, accountResult);
+          result = accountResult;
+          
+        } catch (accountError) {
+          console.log(`TruthChain: [LEATHER] accounts failed, trying enable:`, accountError);
+          
+          // Final attempt: try enable method (common in wallet APIs)
+          try {
+            console.log(`TruthChain: [LEATHER] Trying enable method`);
+            const enableResult = await Promise.race([
+              leather.request('enable'),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Enable timeout')), 15000)
+              )
+            ]);
+            
+            console.log(`TruthChain: [LEATHER] enable response:`, enableResult);
+            result = enableResult;
+            
+          } catch (enableError) {
+            console.error(`TruthChain: [LEATHER] All connection methods failed.`);
+            console.error(`TruthChain: [LEATHER] getAddresses error:`, addressError);
+            console.error(`TruthChain: [LEATHER] accounts error:`, accountError);  
+            console.error(`TruthChain: [LEATHER] enable error:`, enableError);
+            
+            throw new Error('Unable to connect to Leather wallet. Please ensure your Leather wallet is unlocked, up-to-date, and try refreshing the page.');
+          }
         }
       }
+      
+      console.log(`TruthChain: [LEATHER] Connection result:`, result);
+      console.log(`TruthChain: [LEATHER] Result type:`, typeof result);
+      console.log(`TruthChain: [LEATHER] Result is array:`, Array.isArray(result));
 
-      console.log(`TruthChain: [LEATHER] Raw result from Leather:`, result);
-
-      if (!result) {
-        throw new Error('No response from Leather');
-      }
-
+      // Parse Leather wallet response format based on official documentation
       let address: string;
       let publicKey = `leather-${Date.now()}`;
 
-      if (typeof result === 'string') {
+      console.log(`TruthChain: [LEATHER] Parsing Leather response format...`);
+
+      // Leather getAddresses returns an object with addresses array
+      // Expected format: { addresses: [{ address: "...", publicKey: "..." }] }
+      if (result && typeof result === 'object') {
+        
+        // Check for result.addresses (standard Leather format)
+        if ('addresses' in result && Array.isArray(result.addresses) && result.addresses.length > 0) {
+          console.log(`TruthChain: [LEATHER] Found addresses array with ${result.addresses.length} addresses`);
+          
+          // Look for Stacks address first (STX addresses start with 'ST' or 'SP')
+          const stacksAddr = result.addresses.find((addr: any) => {
+            const addrStr = typeof addr === 'string' ? addr : addr.address;
+            return addrStr && (addrStr.startsWith('ST') || addrStr.startsWith('SP'));
+          });
+          
+          if (stacksAddr) {
+            console.log(`TruthChain: [LEATHER] Using Stacks address:`, stacksAddr);
+            address = typeof stacksAddr === 'string' ? stacksAddr : stacksAddr.address;
+            publicKey = (stacksAddr.publicKey || stacksAddr.pubkey) || publicKey;
+          } else {
+            // Fallback to first address
+            const firstAddr = result.addresses[0];
+            console.log(`TruthChain: [LEATHER] Using first available address:`, firstAddr);
+            address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
+            publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+          }
+        }
+        // Check for direct address field
+        else if ('address' in result) {
+          console.log(`TruthChain: [LEATHER] Found direct address field`);
+          address = result.address;
+          publicKey = result.publicKey || result.pubkey || publicKey;
+        }
+        // Check for result field (nested response)
+        else if ('result' in result) {
+          console.log(`TruthChain: [LEATHER] Found nested result field`);
+          const nestedResult = result.result;
+          if (nestedResult && typeof nestedResult === 'object' && 'addresses' in nestedResult) {
+            const addresses = nestedResult.addresses;
+            if (Array.isArray(addresses) && addresses.length > 0) {
+              const firstAddr = addresses[0];
+              address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
+              publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+            } else {
+              throw new Error('No addresses found in nested result');
+            }
+          } else if (typeof nestedResult === 'string') {
+            address = nestedResult;
+          } else {
+            throw new Error('Unexpected nested result format from Leather');
+          }
+        }
+        // Handle array format
+        else if (Array.isArray(result) && result.length > 0) {
+          console.log(`TruthChain: [LEATHER] Found array format with ${result.length} addresses`);
+          const firstAddr = result[0];
+          address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
+          publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+        }
+        else {
+          console.error(`TruthChain: [LEATHER] Unexpected response structure:`, result);
+          console.error(`TruthChain: [LEATHER] Response keys:`, Object.keys(result));
+          throw new Error('Unexpected response format from Leather wallet. Please check console for details.');
+        }
+      }
+      // Handle string response
+      else if (typeof result === 'string') {
+        console.log(`TruthChain: [LEATHER] Got string address directly`);
         address = result;
-      } else if ((result as any).addresses && Array.isArray((result as any).addresses)) {
-        address = (result as any).addresses[0];
-        publicKey = (result as any).publicKey || publicKey;
-      } else if ((result as any).address) {
-        address = (result as any).address;
-        publicKey = (result as any).publicKey || publicKey;
-      } else {
-        throw new Error('Invalid response format');
+      }
+      // Handle array response
+      else if (Array.isArray(result) && result.length > 0) {
+        console.log(`TruthChain: [LEATHER] Got array of addresses`);
+        const firstAddr = result[0];
+        address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
+        publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+      }
+      else {
+        console.error(`TruthChain: [LEATHER] Invalid or empty result:`, result);
+        throw new Error('No valid address data received from Leather wallet');
+      }
+
+      if (!address) {
+        throw new Error('No valid address found in Leather response');
       }
 
       console.log(`TruthChain: [LEATHER] Successfully connected, address: ${address}`);
@@ -592,14 +709,31 @@ class AdvancedWalletDetector {
     } catch (error) {
       console.error(`TruthChain: [LEATHER] Connection failed:`, error);
       
-      // Check if it's a JSON-RPC error and provide more details
-      if (error && typeof error === 'object' && 'error' in error) {
-        const rpcError = (error as any).error;
-        console.error(`TruthChain: [LEATHER] RPC Error Details:`, rpcError);
-        throw new Error(`Leather RPC Error: ${rpcError.message || 'Unknown error'} (Code: ${rpcError.code || 'N/A'})`);
+      // Enhanced error reporting
+      if (error && typeof error === 'object') {
+        if ('code' in error && 'message' in error) {
+          // JSON-RPC error format
+          const code = (error as any).code;
+          const message = (error as any).message;
+          console.error(`TruthChain: [LEATHER] RPC Error - Code: ${code}, Message: ${message}`);
+          
+          if (code === -32002) {
+            throw new Error('User rejected the connection request in Leather wallet');
+          } else if (code === -32603) {
+            throw new Error('Internal error in Leather wallet. Try refreshing the page and reconnecting.');
+          } else {
+            throw new Error(`Leather wallet error: ${message} (Code: ${code})`);
+          }
+        } else if ('error' in error) {
+          // Nested error structure
+          const nestedError = (error as any).error;
+          console.error(`TruthChain: [LEATHER] Nested error:`, nestedError);
+          throw new Error(`Leather connection error: ${nestedError.message || 'Unknown nested error'}`);
+        }
       }
       
-      throw error;
+      // Re-throw with original error message if no specific handling
+      throw error instanceof Error ? error : new Error('Unknown error connecting to Leather wallet');
     }
   }
 
