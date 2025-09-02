@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import TruthChainUsernameManager, { type TruthChainUser } from './utils/username-manager'
+import { professionalWalletConnector } from './lib/professional-wallet-connector'
 
 interface WalletState {
   isConnected: boolean;
@@ -38,6 +39,7 @@ const App = () => {
   const [usernameInput, setUsernameInput] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [currentUser, setCurrentUser] = useState<TruthChainUser | null>(null);
+  const [showDebugMode, setShowDebugMode] = useState(false);
 
   useEffect(() => {
     // Check if wallet is already connected and get username
@@ -64,84 +66,116 @@ const App = () => {
 
   const connectStacksWallet = async () => {
     setIsLoading(true);
+    
     try {
-      console.log('TruthChain: Attempting to connect Stacks wallet...');
+      console.log('🔗 TruthChain: Starting professional wallet connection...');
       
-      // @ts-ignore
-      chrome.runtime.sendMessage(
-        { action: 'connectXverse' },
-        (response: { success: boolean; walletData?: any; error?: string }) => {
-          console.log('Wallet connection response:', response);
-          
-          if (response && response.success && response.walletData) {
-            setWallet({
-              isConnected: true,
-              address: response.walletData.address,
-              publicKey: response.walletData.publicKey,
-              username: null
-            });
+      // Use the professional wallet connector that handles all the edge cases
+      const result = await professionalWalletConnector.connectWallet();
+      
+      if (result.success && result.address) {
+        const walletData = {
+          address: result.address,
+          publicKey: result.publicKey || `professional-${Date.now()}`,
+          provider: result.provider || 'unknown',
+          walletName: result.walletName || 'Wallet',
+          isConnected: true,
+          network: result.network || 'mainnet'
+        };
+        
+        setWallet({
+          isConnected: true,
+          address: walletData.address,
+          publicKey: walletData.publicKey,
+          username: null
+        });
 
-            // Check for existing username after wallet connection
-            const checkUsername = async () => {
-              const usernameManager = TruthChainUsernameManager.getInstance();
-              const user = await usernameManager.getUserByWallet(response.walletData.address);
-              if (user) {
-                setCurrentUser(user);
-                setWallet(prev => ({ ...prev, username: user.username }));
-              } else {
-                // Prompt for username creation
-                setShowUsernameSetup(true);
-              }
-            };
-            checkUsername();
-            
-            const walletName = response.walletData.walletName || response.walletData.provider || 'Wallet';
-            const network = response.walletData.network || 'testnet';
-            
-            alert(
-              `🎉 ${walletName} Connected Successfully!\n\n` +
-              `📍 Address: ${response.walletData.address.slice(0, 12)}...${response.walletData.address.slice(-8)}\n` +
-              `🌐 Network: ${network.charAt(0).toUpperCase() + network.slice(1)}\n` +
-              `🔗 Provider: ${response.walletData.provider}\n\n` +
-              `✅ Ready for TruthChain operations!`
-            );
+        // Store wallet data for persistence
+        chrome.storage.local.set({ walletData });
+
+        // Check for existing username after wallet connection
+        const checkUsername = async () => {
+          const usernameManager = TruthChainUsernameManager.getInstance();
+          const user = await usernameManager.getUserByWallet(walletData.address);
+          if (user) {
+            setCurrentUser(user);
+            setWallet(prev => ({ ...prev, username: user.username }));
           } else {
-            console.error('Wallet connection failed:', response?.error);
-            
-            const errorMsg = response?.error || 'Unknown error';
-            
-            if (errorMsg.includes('No Stacks wallet') || errorMsg.includes('not detected') || errorMsg.includes('not found')) {
-              alert(
-                '🔗 Stacks Wallet Required\n\n' +
-                'TruthChain supports these Stacks wallets:\n\n' +
-                '🥇 Xverse Wallet (Recommended)\n' +
-                '   → Chrome Web Store → Search "Xverse Wallet"\n' +
-                '   → Supports Bitcoin + Stacks\n\n' +
-                '🥈 Leather Wallet (Hiro)\n' +
-                '   → Visit leather.io or hiro.so\n' +
-                '   → Full Stacks ecosystem support\n\n' +
-                'Setup Instructions:\n' +
-                '1. Install your preferred wallet\n' +
-                '2. Create or restore your account\n' +
-                '3. Make sure the wallet is unlocked\n' +
-                '4. Refresh this extension\n' +
-                '5. Try connecting again\n\n' +
-                'Need testnet STX? Visit stacks.co/testnet-faucet'
-              );
-            } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
-              alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
-            } else if (errorMsg.includes('timeout')) {
-              alert('⏱️ Connection Timeout\n\nWallet connection timed out.\n\nTroubleshooting:\n• Make sure your wallet is unlocked\n• Check for wallet popup windows\n• Try refreshing the page\n• Restart your wallet extension');
-            } else {
-              alert(`❌ Connection Failed\n\nError: ${errorMsg}\n\nTroubleshooting:\n• Ensure wallet is unlocked\n• Check wallet permissions\n• Refresh the page and try again\n• Restart browser if needed`);
-            }
+            setShowUsernameSetup(true);
           }
-          setIsLoading(false);
-        }
-      );
+        };
+        checkUsername();
+        
+        alert(
+          `🎉 ${walletData.walletName} Connected Successfully!\n\n` +
+          `📍 Address: ${walletData.address.slice(0, 12)}...${walletData.address.slice(-8)}\n` +
+          `🌐 Network: ${walletData.network}\n` +
+          `🔗 Provider: ${walletData.provider}\n\n` +
+          `✅ Ready for TruthChain operations!`
+        );
+        
+      } else {
+        throw new Error(result.error || 'Professional wallet connector failed');
+      }
+      
+      setIsLoading(false);
+      
     } catch (error) {
-      console.error('Wallet connection error:', error);
-      alert('⚠️ Extension Error\n\nSomething went wrong with the extension.\n\nTry:\n• Refresh this extension\n• Restart your browser\n• Check browser console for errors');
+      console.error('🚨 Professional wallet connection failed:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
+        alert(
+          '🔗 No Stacks Wallets Found\n\n' +
+          'TruthChain couldn\'t detect any Stacks wallets in your browser.\n\n' +
+          '✅ Quick Solutions:\n' +
+          '1. Install Xverse or Leather wallet from Chrome Web Store\n' +
+          '2. Make sure your wallet is UNLOCKED\n' +
+          '3. Navigate to a regular website (like medium.com) and try again\n' +
+          '4. Refresh the current page\n\n' +
+          '⚠️ Note: Wallet detection doesn\'t work on chrome:// pages.\n' +
+          'Please visit a regular website first, then open this popup.'
+        );
+      } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
+        alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
+      } else if (errorMsg.includes('All connection methods failed')) {
+        // Check if this is because we're on a restricted page
+        if (errorMsg.includes('browser internal pages') || errorMsg.includes('chrome://') || errorMsg.includes('extension://')) {
+          alert(
+            '🚫 Restricted Page Detection\n\n' +
+            'Wallet detection is disabled on browser internal pages.\n\n' +
+            '✅ Simple Solution:\n' +
+            '1. Open a new tab and visit any regular website\n' +
+            '   (like medium.com, twitter.com, or google.com)\n' +
+            '2. Open TruthChain popup from that tab\n' +
+            '3. Connect your wallet\n\n' +
+            '⚠️ Browser security prevents wallet access on:\n' +
+            '• chrome:// pages (settings, extensions, etc.)\n' +
+            '• extension:// pages\n' +
+            '• New tab pages'
+          );
+        } else {
+          // Enable debug mode for advanced troubleshooting
+          setShowDebugMode(true);
+          alert(
+            '🔧 Advanced Troubleshooting Required\n\n' +
+            'All connection methods failed. Debug mode is now enabled.\n\n' +
+            '• Check the "Wallet Debug Info" section below\n' +
+            '• Click "Run Provider Diagnostics" for detailed analysis\n\n' +
+            'Common issues:\n' +
+            '• Wallet extension not properly installed\n' +
+            '• Browser security blocking wallet injection\n' +
+            '• Extension conflicts in Chrome\n\n' +
+            'Solutions:\n' +
+            '1. Try Chrome Incognito mode\n' +
+            '2. Disable other wallet extensions temporarily\n' +
+            '3. Check provider diagnostics below\n' +
+            '4. Install Xverse or Leather wallet'
+          );
+        }
+      } else {
+        alert(`❌ Connection Error\n\nError: ${errorMsg}\n\nThis is a technical issue. Please:\n• Check browser console for details\n• Report to TruthChain support if persistent`);
+      }
       setIsLoading(false);
     }
   };
@@ -210,6 +244,40 @@ const App = () => {
     } catch (error) {
       console.error('Username availability check failed:', error);
     }
+  };
+
+  const runWalletDiagnostics = async () => {
+    console.log('🔍 TruthChain: Running comprehensive wallet diagnostics...');
+    
+    // Run professional wallet connector diagnostics
+    professionalWalletConnector.debugProviderInjection();
+    
+    // Detect available wallets
+    const walletStatus = await professionalWalletConnector.detectWallets();
+    console.log('Wallet Detection Results:', walletStatus);
+    
+    // Display results to user
+    const results = [
+      `🔍 WALLET DIAGNOSTIC RESULTS`,
+      ``,
+      `Available Wallets: ${walletStatus.available.length === 0 ? 'None detected' : walletStatus.available.join(', ')}`,
+      `Xverse Provider: ${walletStatus.xverse ? 'Detected' : 'Not Found'}`,
+      `Leather Provider: ${walletStatus.leather ? 'Detected' : 'Not Found'}`,
+      ``,
+      `Chrome Version: ${navigator.userAgent.includes('Chrome') ? navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'Unknown' : 'Not Chrome'}`,
+      ``,
+      `📋 Next Steps:`,
+      walletStatus.available.length === 0 
+        ? '• Install Xverse or Leather wallet extension\n• Make sure wallet is unlocked\n• Refresh this page after installation'
+        : '• Check browser console (F12) for detailed logs\n• Try connecting again\n• If issues persist, try incognito mode',
+      ``,
+      `⚠️ If problems continue, this may indicate:`,
+      `• Extension conflicts with other wallet extensions`,
+      `• Chrome security settings blocking injection`,
+      `• Extension needs browser restart to activate properly`
+    ].join('\n');
+    
+    alert(results);
   };
 
   const registerContentOnTruthChain = () => {
@@ -612,6 +680,82 @@ const App = () => {
                 </div>
               )}
             </div>
+
+          {/* Debug Section - Shows when wallet connection fails */}
+          {showDebugMode && !wallet.isConnected && (
+            <div className='bg-gradient-to-br from-orange-50 to-yellow-50 border border-orange-200/60 rounded-xl overflow-hidden'>
+              <div className='bg-orange-100/60 px-4 py-3 border-b border-orange-200/50'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center space-x-2'>
+                    <svg className='w-4 h-4 text-orange-600' fill='currentColor' viewBox='0 0 20 20'>
+                      <path fillRule='evenodd' d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z' clipRule='evenodd' />
+                    </svg>
+                    <span className='text-sm font-semibold text-orange-800'>Wallet Debug Mode</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDebugMode(false)}
+                    className='text-orange-600 hover:text-orange-700 p-1'
+                  >
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className='p-4 space-y-4'>
+                <p className='text-orange-700 text-sm'>
+                  <strong>Debug mode enabled</strong> - Use these tools to diagnose wallet connection issues specific to your setup.
+                </p>
+                
+                <div className='space-y-3'>
+                  <button
+                    onClick={runWalletDiagnostics}
+                    className='w-full bg-orange-200 text-orange-800 py-3 px-4 rounded-lg font-semibold hover:bg-orange-300 transition-colors duration-200 flex items-center justify-center'
+                  >
+                    <svg className='w-4 h-4 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' />
+                    </svg>
+                    Run Provider Diagnostics
+                  </button>
+                  
+                  <div className='bg-white/80 rounded-lg p-3 border border-orange-200/60'>
+                    <h4 className='text-sm font-semibold text-orange-800 mb-2'>Your Configuration:</h4>
+                    <div className='space-y-1 text-xs'>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Chrome Version:</span>
+                        <span className='text-orange-600 font-mono'>{navigator.userAgent.includes('Chrome') ? navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'Unknown' : 'Not Chrome'}</span>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Expected Xverse:</span>
+                        <span className='text-orange-600 font-mono'>v1.3.0+</span>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span className='text-orange-700'>Detection Methods:</span>
+                        <span className='text-orange-600 font-mono'>3 fallbacks</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-3'>
+                    <div className='flex items-start space-x-2'>
+                      <div className='w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+                        <span className='text-xs text-white font-bold'>!</span>
+                      </div>
+                      <div>
+                        <p className='text-sm text-yellow-800 font-semibold'>Troubleshooting Tips:</p>
+                        <ul className='text-xs text-yellow-700 mt-1 space-y-1'>
+                          <li>• Check browser console (F12) for detailed logs</li>
+                          <li>• Ensure Xverse is unlocked and not just installed</li>
+                          <li>• Try disabling other wallet extensions temporarily</li>
+                          <li>• Test in Chrome incognito mode</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Read-Only Info */}
           {!wallet.isConnected && (

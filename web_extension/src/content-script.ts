@@ -1161,17 +1161,26 @@ async function connectWalletViaPageScript() {
     const detection = await detectWalletsViaPageScript();
     
     if (detection.available.length === 0) {
-      throw new Error('No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.');
+      const errorMessage = detection.error && detection.error.includes('browser internal pages') 
+        ? 'Wallet detection is not available on this page. Please navigate to a regular website (like medium.com) and try again.'
+        : 'No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.';
+      throw new Error(errorMessage);
     }
     
-    // Try connecting to available wallets in priority order
-    const connectionOrder = ['xverse', 'leather', 'stacks'];
+    // Try connecting ONLY to actually detected and available wallets
+    console.log(`TruthChain: [PAGE_SCRIPT_CONNECTION] Available wallets:`, detection.available);
     let lastError: Error | null = null;
     
-    for (const walletType of connectionOrder) {
-      if (detection.available.includes(walletType)) {
-        try {
-          console.log(`TruthChain: Attempting page script connection to ${walletType}`);
+    // Only attempt wallets that are actually available
+    for (const walletType of detection.available) {
+      // Skip unsupported wallet types
+      if (!['xverse', 'leather'].includes(walletType)) {
+        console.log(`TruthChain: [PAGE_SCRIPT_CONNECTION] Skipping ${walletType} - not supported`);
+        continue;
+      }
+      
+      try {
+        console.log(`TruthChain: Attempting page script connection to ${walletType}`);
           
           const result = await sendMessageToPageScript('TRUTHCHAIN_ADVANCED_CONNECT', {
             provider: walletType
@@ -1184,16 +1193,15 @@ async function connectWalletViaPageScript() {
             return result;
           }
           
-        } catch (error) {
-          lastError = error as Error;
-          console.log(`Page script connection attempt to ${walletType} failed:`, error);
-          
-          // If user explicitly rejected, don't try other wallets
-          if (error.message?.toLowerCase().includes('user rejected') || 
-              error.message?.toLowerCase().includes('denied') ||
-              error.message?.toLowerCase().includes('cancelled')) {
-            throw new Error('Connection cancelled by user');
-          }
+      } catch (error) {
+        lastError = error as Error;
+        console.log(`Page script connection attempt to ${walletType} failed:`, error);
+        
+        // If user explicitly rejected, don't try other wallets
+        if (error.message?.toLowerCase().includes('user rejected') || 
+            error.message?.toLowerCase().includes('denied') ||
+            error.message?.toLowerCase().includes('cancelled')) {
+          throw new Error('Connection cancelled by user');
         }
       }
     }
@@ -1259,7 +1267,9 @@ async function detectWalletsEnhanced() {
     const detectedWallets = new Set<string>();
     
     for (const wallet of advancedResult) {
-      if (wallet.detected) {
+      console.log(`TruthChain: [CONVERSION] Checking wallet: ${wallet.name} (${wallet.provider}) - detected: ${wallet.detected}, available: ${wallet.available}`);
+      
+      if (wallet.detected && wallet.available) {
         const providerKey = wallet.provider.includes('-') ? wallet.provider.split('-')[0] : wallet.provider;
         detectedWallets.add(providerKey);
         
@@ -1287,6 +1297,8 @@ async function detectWalletsEnhanced() {
             methods: wallet.methods || []
           };
         }
+      } else {
+        console.log(`TruthChain: [CONVERSION] Skipping wallet: ${wallet.name} (${wallet.provider}) - not properly detected/available`);
       }
     }
     
@@ -1378,23 +1390,34 @@ async function connectWalletEnhanced(): Promise<any> {
   const detection = await detectWalletsEnhanced();
   
   if (detection.available.length === 0) {
-    throw new Error(
-      'No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.'
-    );
+    const errorMessage = detection.error && detection.error.includes('browser internal pages') 
+      ? 'Wallet detection is not available on this page. Please navigate to a regular website (like medium.com) and try again.'
+      : 'No Stacks wallets found. Please install Xverse or Leather wallet and refresh the page.';
+    throw new Error(errorMessage);
   }
   
-  // Try connecting to wallets in priority order using advanced page script
-  const walletPriority = ['xverse', 'leather', 'stacks'];
+  // Try connecting ONLY to actually detected and available wallets
+  console.log(`TruthChain: [CONNECTION] Available wallets from detection:`, detection.available);
+  console.log(`TruthChain: [CONNECTION] Detection details:`, {
+    xverse: detection.xverse,
+    leather: detection.leather, 
+    stacks: detection.stacks,
+    details: detection.details
+  });
+  
+  if (detection.available.length === 0) {
+    throw new Error('No wallets detected. Please install and unlock Xverse or Leather wallet.');
+  }
+  
   let lastError: Error | null = null;
   
-  console.log(`TruthChain: [CONNECTION] Available wallets from detection:`, detection.available);
-  console.log(`TruthChain: [CONNECTION] Wallet priority order:`, walletPriority);
-  
-  for (const walletType of walletPriority) {
-    console.log(`TruthChain: [CONNECTION] Checking wallet: ${walletType}, available: ${detection.available.includes(walletType)}`);
+  // Only attempt connection to wallets that are actually available
+  for (const walletType of detection.available) {
+    console.log(`TruthChain: [CONNECTION] Attempting connection to detected wallet: ${walletType}`);
     
-    if (!detection.available.includes(walletType)) {
-      console.log(`TruthChain: [CONNECTION] Skipping ${walletType} - not in available list`);
+    // Additional safety check
+    if (!['xverse', 'leather'].includes(walletType)) {
+      console.log(`TruthChain: [CONNECTION] Skipping ${walletType} - not a supported wallet type`);
       continue;
     }
     

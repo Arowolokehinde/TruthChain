@@ -58,6 +58,24 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
         .then(result => sendResponse({ success: true, data: result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
+
+    case 'detectWallets':
+      handleWalletDetection()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'connectWallet':
+      handleWalletConnection(request.preferredWallet)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getUsernameByWallet':
+      handleGetUsernameByWallet(request.walletAddress)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
   }
 });
 
@@ -74,6 +92,139 @@ chrome.commands.onCommand.addListener((command: string) => {
       break;
   }
 });
+
+async function handleWalletDetection(): Promise<any> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab.id) {
+      throw new Error('No active tab found');
+    }
+    
+    // Check if it's a valid URL for injection
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('edge://')) {
+      return {
+        success: false,
+        error: 'Wallet detection unavailable on browser internal pages. Please navigate to a regular website (like medium.com or any other site) and try connecting your wallet again.',
+        available: [],
+        xverse: false,
+        leather: false,
+        stacks: false
+      };
+    }
+    
+    try {
+      // Send message to content script to detect wallets
+      const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
+      console.log('Wallet detection from content script:', response);
+      
+      if (response && (response.available || response.xverse || response.leather || response.stacks)) {
+        return {
+          success: true,
+          ...response
+        };
+      }
+    } catch (error) {
+      console.log('Content script wallet detection failed:', error);
+    }
+    
+    // Fallback response if no wallets detected
+    return {
+      success: false,
+      error: 'No Stacks wallets detected. Please ensure Xverse or Leather wallet is installed and unlocked, then refresh this page.',
+      available: [],
+      xverse: false,
+      leather: false,
+      stacks: false,
+      details: {}
+    };
+  } catch (error) {
+    console.error('Wallet detection error:', error);
+    return {
+      success: false,
+      error: error.message,
+      available: [],
+      xverse: false,
+      leather: false,
+      stacks: false
+    };
+  }
+}
+
+async function handleWalletConnection(preferredWallet?: string): Promise<any> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab.id) {
+      throw new Error('No active tab found');
+    }
+    
+    // Check if it's a valid URL for injection
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('Cannot connect wallet on special browser pages');
+    }
+    
+    console.log('TruthChain Background: Attempting wallet connection via content script');
+    
+    try {
+      // First detect available wallets
+      const detectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
+      console.log('TruthChain Background: Wallet detection response:', detectionResponse);
+      
+      if (!detectionResponse || !detectionResponse.available || detectionResponse.available.length === 0) {
+        throw new Error('No wallets detected. Please install Xverse or Leather wallet and refresh the page.');
+      }
+      
+      // Attempt connection with preferred wallet or first available
+      const walletToConnect = preferredWallet || detectionResponse.available[0];
+      console.log('TruthChain Background: Connecting to wallet:', walletToConnect);
+      
+      const connectionResponse = await chrome.tabs.sendMessage(tab.id, { 
+        action: 'connectWallet',
+        preferredWallet: walletToConnect 
+      });
+      
+      console.log('TruthChain Background: Connection response:', connectionResponse);
+      
+      if (connectionResponse && connectionResponse.success && connectionResponse.walletData) {
+        return {
+          success: true,
+          walletData: connectionResponse.walletData,
+          provider: connectionResponse.provider || walletToConnect,
+          walletName: connectionResponse.walletName || 'Stacks Wallet'
+        };
+      } else {
+        throw new Error(connectionResponse?.error || 'Wallet connection failed');
+      }
+    } catch (error) {
+      console.error('TruthChain Background: Content script connection failed:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('TruthChain Background: Wallet connection error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+async function handleGetUsernameByWallet(walletAddress: string): Promise<any> {
+  try {
+    // This would typically call your username manager
+    // For now, return a placeholder response
+    return {
+      success: false,
+      error: 'Username lookup not implemented yet'
+    };
+  } catch (error) {
+    console.error('Username lookup error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 async function handleXverseConnection(): Promise<WalletData> {
   try {
