@@ -27,11 +27,16 @@ app.get('/', (_req: express.Request, res: express.Response) => {
     description: 'Decentralized content verification system for Twitter',
     endpoints: {
       health: '/api/health',
+      // Development/Testing Endpoints (with senderKey)
       register: 'POST /api/register',
+      checkRegistration: 'POST /api/check-registration',
+      // Secure Frontend Endpoints (no senderKey)
+      secureRegister: 'POST /api/secure/register',
+      confirmRegistration: 'POST /api/secure/confirm-registration',
+      // Verification Endpoints
       verify: 'POST /api/verify',
       quickVerify: 'GET /api/verify/:hash',
-      batchVerify: 'POST /api/verify/batch',
-      checkRegistration: 'POST /api/check-registration'
+      batchVerify: 'POST /api/verify/batch'
     },
   });
 });

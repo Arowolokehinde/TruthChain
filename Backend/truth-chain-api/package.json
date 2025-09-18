@@ -1,7 +1,19 @@
 {
     "scripts": {
-      "dev": "ts-node src/app.ts",
-      "build": "tsc",
-      "start": "node dist/src/app.js"
+        "dev": "ts-node src/app.ts",
+        "build": "tsc",
+        "start": "node dist/src/app.js"
+    },
+    "dependencies": {
+        "@stacks/transactions": "^7.2.0",
+        "cors": "^2.8.5",
+        "express": "^5.1.0",
+        "helmet": "^8.1.0",
+        "morgan": "^1.10.1"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.3",
+        "@types/morgan": "^1.9.10"
     }
-  }
+}
