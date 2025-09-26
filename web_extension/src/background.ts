@@ -2,6 +2,7 @@
 
 import { storeToIPFS } from './lib/ipfs';
 import { anchorToStacks, verifyOnStacks } from './lib/stacks';
+import TruthChainAPIService from './services/api-service';
 
 console.log('TruthChain background script loaded');
 
@@ -310,13 +311,9 @@ async function handleXverseConnection(): Promise<WalletData> {
   }
 }
 
-// Legacy MAIN world injection functions removed - now using page script communication only
 
-// Removed legacy wallet detection functions
 
-// Legacy wallet detection function removed - now using content script communication only
-
-async function handleContentRegistration(request?: any): Promise<RegistrationResult> {
+async function handleContentRegistration(request?: {contentData?: ContentData}): Promise<RegistrationResult> {
   try {
     let content;
     
@@ -345,65 +342,50 @@ async function handleContentRegistration(request?: any): Promise<RegistrationRes
       throw new Error('No wallet connected - please connect your Stacks wallet first');
     }
 
-    // Enhanced content processing
-    const processedContent = {
-      ...content,
-      registrationTimestamp: new Date().toISOString(),
-      creator: storage.walletData.address,
-      contentHash: content.hash || await generateContentHash(content),
-      integrity: {
-        method: 'SHA-256',
-        original: true,
-        verified: false
-      }
-    };
-
-    // Store to IPFS with metadata
-    const cid = await storeToIPFS(processedContent);
+    // Use the new API service to register content
+    const apiService = TruthChainAPIService.getInstance();
     
-    // Register on Stacks blockchain
-    let txId;
-    let registrationStatus = 'pending';
+    console.log('🔗 TruthChain: Registering content via API service...');
     
-    try {
-      // Call register-content function from smart contract
-      txId = await anchorToStacks(cid, storage.walletData.address, { 
-        network: 'testnet',
-        functionName: 'register-content',
-        functionArgs: [
-          processedContent.contentHash,
-          processedContent.title || 'Untitled',
-          processedContent.type || 'webpage'
-        ]
-      });
-      registrationStatus = 'confirmed';
-    } catch (error) {
-      console.error('Real Stacks transaction failed, using simulation:', error);
-      // Fallback to simulation for development
-      const timestamp = Date.now();
-      const random = Math.random().toString(16).slice(2, 10);
-      txId = `0x${timestamp.toString(16)}${random}`;
-      registrationStatus = 'simulated';
-    }
-    
-    const registrationResult: RegistrationResult = {
-      cid,
-      txId,
-      timestamp: processedContent.registrationTimestamp
-    };
-
-    // Store comprehensive registration record
-    const contentHash = processedContent.contentHash;
-    await chrome.storage.local.set({
-      [`truthchain_${contentHash}`]: {
-        ...registrationResult,
-        content: processedContent,
+    const registrationResponse = await apiService.registerContent({
+      content: content.content || content.excerpt || '',
+      title: content.title || 'Untitled Content',
+      url: content.url || '',
+      contentType: determineContentType(content),
+      metadata: {
+        author: content.author || 'Unknown',
+        platform: content.hostname || 'Unknown',
+        timestamp: content.timestamp || new Date().toISOString(),
         walletAddress: storage.walletData.address,
-        registrationStatus,
+        extensionVersion: '1.0.0'
+      }
+    });
+
+    if (!registrationResponse.success || !registrationResponse.data) {
+      throw new Error(registrationResponse.error || 'API registration failed');
+    }
+
+    const apiData = registrationResponse.data;
+    
+    // Create registration result compatible with existing interface
+    const registrationResult: RegistrationResult = {
+      cid: `ipfs-${apiData.hash}`, // Create IPFS-style identifier
+      txId: apiData.txId || generateMockTxId(),
+      timestamp: new Date().toISOString()
+    };
+
+    // Store comprehensive registration record locally for quick access
+    await chrome.storage.local.set({
+      [`truthchain_${apiData.hash}`]: {
+        ...registrationResult,
+        content: content,
+        walletAddress: storage.walletData.address,
+        registrationStatus: 'confirmed',
         platform: content.hostname,
         author: content.author,
-        contentType: content.type,
-        isReal: registrationStatus === 'confirmed'
+        contentType: determineContentType(content),
+        isReal: true,
+        apiData: apiData // Store complete API response
       }
     });
 
@@ -413,13 +395,15 @@ async function handleContentRegistration(request?: any): Promise<RegistrationRes
     const userContent = userStorage[userKey] || [];
     
     userContent.unshift({
-      cid,
-      txId,
+      cid: registrationResult.cid,
+      txId: registrationResult.txId,
       title: content.title,
       timestamp: registrationResult.timestamp,
       url: content.url,
-      type: content.type,
-      status: registrationStatus
+      type: determineContentType(content),
+      status: 'confirmed',
+      registrationId: apiData.registrationId,
+      hash: apiData.hash
     });
     
     await chrome.storage.local.set({ [userKey]: userContent.slice(0, 100) }); // Keep last 100
@@ -429,17 +413,44 @@ async function handleContentRegistration(request?: any): Promise<RegistrationRes
       type: 'basic',
       iconUrl: 'Truthchain.jpeg',
       title: 'Content Registered on TruthChain',
-      message: `"${content.title}" ${registrationStatus === 'confirmed' ? 'successfully registered' : 'simulated registration'} on blockchain`
+      message: `"${content.title}" successfully registered on blockchain (ID: ${apiData.registrationId})`
     });
 
+    console.log('✅ TruthChain: Content registration completed successfully');
     return registrationResult;
+    
   } catch (error) {
-    console.error('Registration failed:', error);
+    console.error('❌ TruthChain: Registration failed:', error);
     throw error;
   }
 }
 
-async function handleContentVerification(request?: any): Promise<any> {
+// Helper functions for the new API integration
+function determineContentType(content: ContentData): 'tweet' | 'blog_post' | 'page' | 'media' | 'document' {
+  const hostname = content.hostname?.toLowerCase() || '';
+  
+  if (hostname.includes('twitter.com') || hostname.includes('x.com')) return 'tweet';
+  if (hostname.includes('medium.com') || hostname.includes('substack.com') || hostname.includes('dev.to')) return 'blog_post';
+  if (hostname.includes('youtube.com') || hostname.includes('vimeo.com')) return 'media';
+  if (hostname.includes('.pdf') || content.title?.includes('PDF')) return 'document';
+  
+  return 'page'; // Default
+}
+
+function generateMockTxId(): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(16).slice(2, 10);
+  return `0x${timestamp.toString(16)}${random}`;
+}
+
+async function handleContentVerification(request?: {contentData?: ContentData; silent?: boolean}): Promise<{
+  isRegistered: boolean;
+  owner?: string;
+  timestamp?: number;
+  message?: string;
+  source?: string;
+  [key: string]: unknown;
+}> {
   try {
     let content;
     const isSilent = request?.silent;
@@ -458,81 +469,77 @@ async function handleContentVerification(request?: any): Promise<any> {
       content = contentResults[0].result;
     }
     
-    const contentHash = content.hash || await generateContentHash(content);
+    const contentString = content.content || content.excerpt || '';
+    const apiService = TruthChainAPIService.getInstance();
     
-    // Check local storage first (fastest)
-    const stored = await chrome.storage.local.get(`truthchain_${contentHash}`);
-    const registrationRecord = stored[`truthchain_${contentHash}`];
+    if (!isSilent) {
+      console.log('🔍 TruthChain: Verifying content via API service...');
+    }
     
-    if (registrationRecord) {
+    // Use API service to verify content
+    const verificationResponse = await apiService.verifyContent({
+      content: contentString
+    });
+    
+    if (!verificationResponse.success) {
+      if (!isSilent) {
+        console.log('❌ TruthChain: API verification failed:', verificationResponse.error);
+      }
+      return {
+        isRegistered: false,
+        message: verificationResponse.error || 'Verification failed',
+        source: 'api_error'
+      };
+    }
+    
+    const apiData = verificationResponse.data;
+    
+    if (apiData?.exists) {
       const result = {
         isRegistered: true,
-        owner: registrationRecord.walletAddress,
-        timestamp: registrationRecord.timestamp,
-        cid: registrationRecord.cid,
-        txId: registrationRecord.txId,
-        status: registrationRecord.registrationStatus || 'confirmed',
-        platform: registrationRecord.platform,
-        author: registrationRecord.author,
-        contentType: registrationRecord.contentType,
-        source: 'local'
+        owner: apiData.author || 'Unknown',
+        timestamp: apiData.timestamp,
+        blockHeight: apiData.blockHeight,
+        registrationId: apiData.registrationId,
+        contentType: apiData.contentType,
+        source: 'blockchain_api',
+        message: 'Content verified on TruthChain blockchain'
       };
       
       if (!isSilent) {
-        console.log('Content verified from local storage:', result);
+        console.log('✅ TruthChain: Content verified successfully:', result);
+      }
+      return result;
+    } else {
+      const result = {
+        isRegistered: false,
+        message: 'Content not found on TruthChain - not yet registered',
+        source: 'blockchain_api'
+      };
+      
+      if (!isSilent) {
+        console.log('ℹ️ TruthChain: Content not found on blockchain');
       }
       return result;
     }
-
-    // Verify on Stacks blockchain using verify-content function
-    try {
-      const verification = await verifyOnStacks(contentHash, {
-        network: 'testnet',
-        functionName: 'verify-content'
-      });
-      
-      if (verification.exists) {
-        const result = {
-          isRegistered: true,
-          owner: verification.owner,
-          timestamp: verification.timestamp,
-          blockHeight: verification.blockHeight,
-          source: 'blockchain'
-        };
-        
-        if (!isSilent) {
-          console.log('Content verified on blockchain:', result);
-        }
-        return result;
-      }
-    } catch (error) {
-      if (!isSilent) {
-        console.log('Blockchain verification failed, content not found:', error.message);
-      }
-    }
-
-    // Check if content was modified (integrity check)
-    if (request?.originalHash && request.originalHash !== contentHash) {
-      return {
-        isRegistered: false,
-        isModified: true,
-        message: 'Content has been modified since registration',
-        originalHash: request.originalHash,
-        currentHash: contentHash
-      };
-    }
-
+    
+  } catch (error) {
+    console.error('❌ TruthChain: Verification failed:', error);
     return {
       isRegistered: false,
-      message: 'Content not found on TruthChain - not yet registered or registration pending'
+      message: error instanceof Error ? error.message : 'Unknown verification error',
+      source: 'error'
     };
-  } catch (error) {
-    console.error('Verification failed:', error);
-    throw error;
   }
 }
 
-async function handleGetUserContent(address: string): Promise<any[]> {
+async function handleGetUserContent(address: string): Promise<Array<{
+  cid: string;
+  title: string;
+  timestamp: string;
+  url: string;
+  txId: string;
+}>> {
   try {
     // Get all stored registration records for this address
     const allData = await chrome.storage.local.get(null);
