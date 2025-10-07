@@ -7,6 +7,8 @@ interface WalletState {
   address: string | null;
   publicKey: string | null;
   username?: string | null;
+  bnsName?: string | null;
+  fullBNSName?: string | null;
 }
 
 interface ContentState {
@@ -18,12 +20,43 @@ interface ContentState {
   lastUpdate: string | null;
 }
 
+interface ChromeStorageResult {
+  walletData?: {
+    address: string;
+    publicKey: string;
+    bnsName?: string;
+    fullBNSName?: string;
+  };
+}
+
+interface ContentItem {
+  cid?: string;
+  txId?: string;
+  isRegistered?: boolean;
+  owner?: string;
+  timestamp?: string;
+}
+
+interface ChromeRuntimeResponse {
+  success: boolean;
+  data?: {
+    cid?: string;
+    txId?: string;
+    isRegistered?: boolean;
+    owner?: string;
+    timestamp?: string;
+  }[];
+  error?: string;
+}
+
 const App = () => {
   const [wallet, setWallet] = useState<WalletState>({
     isConnected: false,
     address: null,
     publicKey: null,
-    username: null
+    username: null,
+    bnsName: null,
+    fullBNSName: null
   });
   const [content, setContent] = useState<ContentState>({
     isProcessing: false,
@@ -43,14 +76,15 @@ const App = () => {
 
   useEffect(() => {
     // Check if wallet is already connected and get username
-    // @ts-ignore
-    chrome.storage.local.get(['walletData'], async (result: { walletData?: any }) => {
+    chrome.storage.local.get(['walletData'], async (result: ChromeStorageResult) => {
       if (result.walletData) {
         setWallet({
           isConnected: true,
           address: result.walletData.address,
           publicKey: result.walletData.publicKey,
-          username: null
+          username: null,
+          bnsName: result.walletData.bnsName || null,
+          fullBNSName: result.walletData.fullBNSName || null
         });
 
         // Check for existing username
@@ -68,8 +102,6 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      console.log('🔗 TruthChain: Starting professional wallet connection...');
-      
       // Use the professional wallet connector that handles all the edge cases
       const result = await professionalWalletConnector.connectWallet();
       
@@ -87,11 +119,18 @@ const App = () => {
           isConnected: true,
           address: walletData.address,
           publicKey: walletData.publicKey,
-          username: null
+          username: null,
+          bnsName: result.bnsName,
+          fullBNSName: result.fullBNSName
         });
 
-        // Store wallet data for persistence
-        chrome.storage.local.set({ walletData });
+        // Store wallet data for persistence (including BNS info)
+        const extendedWalletData = {
+          ...walletData,
+          bnsName: result.bnsName,
+          fullBNSName: result.fullBNSName
+        };
+        chrome.storage.local.set({ walletData: extendedWalletData });
 
         // Check for existing username after wallet connection
         const checkUsername = async () => {
@@ -110,8 +149,9 @@ const App = () => {
           `🎉 ${walletData.walletName} Connected Successfully!\n\n` +
           `📍 Address: ${walletData.address.slice(0, 12)}...${walletData.address.slice(-8)}\n` +
           `🌐 Network: ${walletData.network}\n` +
-          `🔗 Provider: ${walletData.provider}\n\n` +
-          `✅ Ready for TruthChain operations!`
+          `🔗 Provider: ${walletData.provider}\n` +
+          (result.bnsName ? `🏷️ BNS Name: ${result.fullBNSName}\n` : '') +
+          `\n✅ Ready for TruthChain operations!`
         );
         
       } else {
@@ -121,7 +161,6 @@ const App = () => {
       setIsLoading(false);
       
     } catch (error) {
-      console.error('🚨 Professional wallet connection failed:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       
       if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
@@ -181,9 +220,15 @@ const App = () => {
   };
 
   const disconnectWallet = () => {
-    // @ts-ignore
     chrome.storage.local.remove(['walletData'], () => {
-      setWallet({ isConnected: false, address: null, publicKey: null, username: null });
+      setWallet({ 
+        isConnected: false, 
+        address: null, 
+        publicKey: null, 
+        username: null,
+        bnsName: null,
+        fullBNSName: null
+      });
       setCurrentUser(null);
       setShowUsernameSetup(false);
     });
@@ -221,9 +266,8 @@ const App = () => {
             `👤 Username: ${user.username}\n` +
             `🔗 Tied to: ${wallet.address.slice(0, 12)}...${wallet.address.slice(-8)}\n\n` +
             `✅ Your TruthChain identity is now ready!`);
-    } catch (error: any) {
-      console.error('Username creation failed:', error);
-      setUsernameError(error.message || 'Failed to create username');
+    } catch (error: unknown) {
+      setUsernameError((error as Error).message || 'Failed to create username');
     } finally {
       setIsLoading(false);
     }
@@ -280,17 +324,49 @@ const App = () => {
     alert(results);
   };
 
+  const testBNSLookup = async () => {
+    try {
+      // Test BNS lookup for the current wallet if connected
+      if (wallet.address) {
+        const result = await professionalWalletConnector.getBNSNameForAddress(wallet.address);
+        alert(
+          `🧪 BNS Lookup Test Results\n\n` +
+          `Address: ${wallet.address.slice(0, 12)}...${wallet.address.slice(-8)}\n` +
+          (result.bnsName 
+            ? `✅ BNS Name Found: ${result.fullBNSName}\n` 
+            : `ℹ️ No BNS name found for this address\n`) +
+          (result.error ? `⚠️ Error: ${result.error}\n` : '') +
+          `\nTest completed successfully!`
+        );
+      } else {
+        // Test with a known BNS address (example)
+        const testAddress = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B'; // Example address
+        const result = await professionalWalletConnector.getBNSNameForAddress(testAddress);
+        alert(
+          `🧪 BNS Lookup Test Results\n\n` +
+          `Test Address: ${testAddress.slice(0, 12)}...${testAddress.slice(-8)}\n` +
+          (result.bnsName 
+            ? `✅ BNS Name Found: ${result.fullBNSName}\n` 
+            : `ℹ️ No BNS name found for this address\n`) +
+          (result.error ? `⚠️ Error: ${result.error}\n` : '') +
+          `\nTest completed successfully!`
+        );
+      }
+    } catch (error) {
+      alert(`❌ BNS Test Failed\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const registerContentOnTruthChain = () => {
     setContent(prev => ({ ...prev, isProcessing: true, lastAction: 'registering' }));
     
-    // @ts-ignore
-    chrome.runtime.sendMessage({ action: 'registerContent' }, (response: any) => {
+    chrome.runtime.sendMessage({ action: 'registerContent' }, (response: ChromeRuntimeResponse) => {
       if (response.success) {
         setContent({
           isProcessing: false,
           lastAction: 'registered',
-          contentCID: response.data.cid,
-          txId: response.data.txId,
+          contentCID: response.data?.[0]?.cid || null,
+          txId: response.data?.[0]?.txId || null,
           error: null,
           lastUpdate: new Date().toLocaleTimeString()
         });
@@ -298,7 +374,7 @@ const App = () => {
         setContent(prev => ({ 
           ...prev, 
           isProcessing: false,
-          error: response.error,
+          error: response.error || 'Registration failed',
           lastUpdate: new Date().toLocaleTimeString()
         }));
       }
@@ -308,36 +384,35 @@ const App = () => {
   const verifyContentOnTruthChain = () => {
     setContent(prev => ({ ...prev, isProcessing: true, lastAction: 'verifying' }));
     
-    // @ts-ignore
-    chrome.runtime.sendMessage({ action: 'verifyContent' }, (response: any) => {
+    chrome.runtime.sendMessage({ action: 'verifyContent' }, (response: ChromeRuntimeResponse) => {
       setContent(prev => ({ ...prev, isProcessing: false }));
       
-      if (response.success) {
-        const message = response.data.isRegistered 
-          ? `✅ Content verified on TruthChain!\nOwner: ${response.data.owner}\nTimestamp: ${response.data.timestamp}` 
+      if (response.success && response.data?.[0]) {
+        const data = response.data[0];
+        const message = data.isRegistered 
+          ? `✅ Content verified on TruthChain!\nOwner: ${data.owner}\nTimestamp: ${data.timestamp}` 
           : '❌ Content not found on TruthChain';
         alert(message);
       } else {
-        alert('❌ Verification failed: ' + response.error);
+        alert('❌ Verification failed: ' + (response.error || 'Unknown error'));
       }
     });
   };
 
   const viewMyContent = () => {
     if (wallet.address) {
-      // @ts-ignore
       chrome.runtime.sendMessage({ 
         action: 'getUserContent', 
         address: wallet.address 
-      }, (response: any) => {
-        if (response.success) {
-          const contentList = response.data.map((item: any, index: number) => 
-            `${index + 1}. CID: ${item.cid}\n   Date: ${item.timestamp}`
+      }, (response: ChromeRuntimeResponse) => {
+        if (response.success && response.data) {
+          const contentList = response.data.map((item: ContentItem, index: number) => 
+            `${index + 1}. CID: ${item.cid || 'N/A'}\n   Date: ${item.timestamp || 'N/A'}`
           ).join('\n\n');
           
           alert(`📚 Your TruthChain Content:\n\n${contentList || 'No content found'}`);
         } else {
-          alert('❌ Failed to fetch content: ' + response.error);
+          alert('❌ Failed to fetch content: ' + (response.error || 'Unknown error'));
         }
       });
     }
@@ -496,6 +571,33 @@ const App = () => {
                       {wallet.address?.slice(0, 16)}...{wallet.address?.slice(-16)}
                     </p>
                   </div>
+
+                  {/* BNS Name Display */}
+                  {wallet.bnsName && (
+                    <div className='bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-3 border border-teal-200/60'>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-xs font-medium text-teal-700 uppercase tracking-wide'>🏷️ BNS Name</span>
+                        <button 
+                          onClick={() => {
+                            if (wallet.fullBNSName) {
+                              navigator.clipboard.writeText(wallet.fullBNSName);
+                              setCopySuccess('BNS name copied!');
+                              setTimeout(() => setCopySuccess(''), 2000);
+                            }
+                          }}
+                          className='text-xs text-teal-600 hover:text-teal-700 font-medium hover:underline'
+                        >
+                          {copySuccess === 'BNS name copied!' ? '✓ Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className='font-mono text-sm font-semibold text-teal-800 bg-white/80 rounded-lg p-2 border border-teal-200/50'>
+                        {wallet.fullBNSName}
+                      </p>
+                      <p className='text-xs text-teal-600 mt-1'>
+                        Bitcoin Name Service identity for this wallet
+                      </p>
+                    </div>
+                  )}
                   
                   <div className='flex space-x-2'>
                     <button
@@ -716,6 +818,16 @@ const App = () => {
                       <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' />
                     </svg>
                     Run Provider Diagnostics
+                  </button>
+
+                  <button
+                    onClick={testBNSLookup}
+                    className='w-full bg-teal-200 text-teal-800 py-3 px-4 rounded-lg font-semibold hover:bg-teal-300 transition-colors duration-200 flex items-center justify-center'
+                  >
+                    <svg className='w-4 h-4 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z' />
+                    </svg>
+                    🧪 Test BNS Lookup
                   </button>
                   
                   <div className='bg-white/80 rounded-lg p-3 border border-orange-200/60'>
