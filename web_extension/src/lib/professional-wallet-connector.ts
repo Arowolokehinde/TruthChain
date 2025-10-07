@@ -1,16 +1,22 @@
 // Professional-grade wallet connection system
 // Addresses known issues with @stacks/connect v8 and Xverse detection
+// Now includes BNS (Bitcoin Name Service) support
 
 interface WalletConnectionResult {
   success: boolean;
   address?: string;
   publicKey?: string;
+  bnsName?: string;
+  fullBNSName?: string;
   provider?: string;
   walletName?: string;
   network?: string;
   error?: string;
 }
 
+
+
+import { professionalWalletService } from '../services/professional-wallet-service';
 
 
 export class ProfessionalWalletConnector {
@@ -135,6 +141,30 @@ export class ProfessionalWalletConnector {
         stacks: false,
         error: error instanceof Error ? error.message : 'Communication with background script failed'
       };
+    }
+  }
+
+  /**
+   * Get BNS name for currently connected wallet
+   */
+  async getCurrentWalletBNSName(): Promise<{ bnsName?: string; fullBNSName?: string; error?: string }> {
+    try {
+      return await professionalWalletService.getCurrentWalletBNSName();
+    } catch (error) {
+      console.error('Error getting current wallet BNS name:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Get BNS name for any Stacks address
+   */
+  async getBNSNameForAddress(address: string): Promise<{ bnsName?: string; fullBNSName?: string; error?: string }> {
+    try {
+      return await professionalWalletService.getBNSNameForAddress(address);
+    } catch (error) {
+      console.error('Error getting BNS name for address:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
