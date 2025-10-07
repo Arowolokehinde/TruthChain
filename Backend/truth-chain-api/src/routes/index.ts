@@ -18,10 +18,14 @@ const blockchainService = new BlockchainService(blockchainConfig);
 const registrationController = new RegistrationController(blockchainService);
 const verificationController = new VerificationController(blockchainService);
 
-// Registration Routes
+// Registration Routes (Development/Testing with senderKey)
 router.post('/register', registrationController.registerTweet.bind(registrationController));
 router.post('/check-registration', registrationController.checkRegistration.bind(registrationController));
 router.get('/registration/:txId', registrationController.getRegistrationByTxId.bind(registrationController));
+
+// Secure Registration Routes (Frontend Integration - no senderKey)
+router.post('/secure/register', registrationController.secureRegisterTweet.bind(registrationController));
+router.post('/secure/confirm-registration', registrationController.confirmRegistration.bind(registrationController));
 
 // Verification Routes
 router.post('/verify', verificationController.verifyTweet.bind(verificationController));
