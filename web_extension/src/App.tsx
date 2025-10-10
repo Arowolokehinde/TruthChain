@@ -132,18 +132,28 @@ const App = () => {
         };
         chrome.storage.local.set({ walletData: extendedWalletData });
 
+        let hasExistingUser = false;
+        
         // Check for existing username after wallet connection
         const checkUsername = async () => {
           const usernameManager = TruthChainUsernameManager.getInstance();
           const user = await usernameManager.getUserByWallet(walletData.address);
           if (user) {
+            hasExistingUser = true;
             setCurrentUser(user);
             setWallet(prev => ({ ...prev, username: user.username }));
           } else {
+            // Pre-populate username input with BNS name if available
+            if (result.bnsName) {
+              setUsernameInput(result.bnsName);
+              setUsernameError(''); // Clear any previous errors
+            } else {
+              setUsernameInput(''); // Clear input if no BNS name
+            }
             setShowUsernameSetup(true);
           }
         };
-        checkUsername();
+        await checkUsername();
         
         alert(
           `🎉 ${walletData.walletName} Connected Successfully!\n\n` +
@@ -151,6 +161,7 @@ const App = () => {
           `🌐 Network: ${walletData.network}\n` +
           `🔗 Provider: ${walletData.provider}\n` +
           (result.bnsName ? `🏷️ BNS Name: ${result.fullBNSName}\n` : '') +
+          (result.bnsName && !hasExistingUser ? `\n💡 Your BNS name will be suggested as your TruthChain username!\n` : '') +
           `\n✅ Ready for TruthChain operations!`
         );
         
@@ -543,7 +554,16 @@ const App = () => {
                       </div>
                       <p className='text-xs text-yellow-700 mb-2'>Create a unique username to use TruthChain features</p>
                       <button
-                        onClick={() => setShowUsernameSetup(true)}
+                        onClick={() => {
+                          // Pre-populate with BNS name if available
+                          if (wallet.bnsName) {
+                            setUsernameInput(wallet.bnsName);
+                            setUsernameError('');
+                          } else {
+                            setUsernameInput('');
+                          }
+                          setShowUsernameSetup(true);
+                        }}
                         className='w-full bg-yellow-200 text-yellow-800 py-2 px-3 rounded-lg text-xs font-semibold hover:bg-yellow-300 transition-colors duration-200'
                       >
                         Create Username
@@ -973,6 +993,25 @@ const App = () => {
                   </div>
                 </div>
 
+                {/* BNS Name Suggestion Notice */}
+                {wallet.bnsName && usernameInput === wallet.bnsName && (
+                  <div className='bg-emerald-50 border border-emerald-200/60 rounded-xl p-4'>
+                    <div className='flex items-start space-x-3'>
+                      <div className='w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+                        <svg className='w-3.5 h-3.5 text-white' fill='currentColor' viewBox='0 0 20 20'>
+                          <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className='text-sm text-emerald-800 font-semibold mb-1'>🏷️ BNS Name Detected</p>
+                        <p className='text-xs text-emerald-700 leading-relaxed'>
+                          We've automatically suggested your BNS name <strong>{wallet.fullBNSName}</strong> as your TruthChain username. You can keep it or enter a different one.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className='block text-sm font-semibold text-slate-700 mb-2'>
                     Username
@@ -986,12 +1025,19 @@ const App = () => {
                         setUsernameError('');
                       }}
                       onBlur={() => checkUsernameAvailability(usernameInput)}
-                      placeholder='Enter your username'
-                      className='w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm'
+                      placeholder={wallet.bnsName ? `Suggested: ${wallet.bnsName}` : 'Enter your username'}
+                      className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm ${
+                        wallet.bnsName && usernameInput === wallet.bnsName 
+                          ? 'border-emerald-300 bg-emerald-50/50' 
+                          : 'border-slate-200'
+                      }`}
                       maxLength={20}
                     />
-                    <div className='absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400'>
-                      @
+                    <div className='absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1'>
+                      {wallet.bnsName && usernameInput === wallet.bnsName && (
+                        <span className='text-xs text-emerald-600 font-semibold'>🏷️</span>
+                      )}
+                      <span className='text-xs text-slate-400'>@</span>
                     </div>
                   </div>
                   {usernameError && (

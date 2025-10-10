@@ -4,8 +4,6 @@ import { storeToIPFS } from './lib/ipfs';
 import { anchorToStacks, verifyOnStacks } from './lib/stacks';
 import TruthChainAPIService from './services/api-service';
 
-console.log('TruthChain background script loaded');
-
 interface ContentData {
   title: string;
   content: string;
@@ -28,12 +26,11 @@ interface RegistrationResult {
 
 // Handle extension installation
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('TruthChain extension installed');
+  // Extension installed successfully
 });
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (response?: any) => void) => {
-  console.log('Background received message:', request);
   
   switch (request.action) {
     case 'connectXverse':
@@ -82,8 +79,6 @@ chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (
 
 // Handle keyboard commands
 chrome.commands.onCommand.addListener((command: string) => {
-  console.log('Command received:', command);
-  
   switch (command) {
     case 'bridge-content':
       executeRegistrationCommand();
@@ -117,7 +112,6 @@ async function handleWalletDetection(): Promise<any> {
     try {
       // Send message to content script to detect wallets
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('Wallet detection from content script:', response);
       
       if (response && (response.available || response.xverse || response.leather || response.stacks)) {
         return {
@@ -126,7 +120,7 @@ async function handleWalletDetection(): Promise<any> {
         };
       }
     } catch (error) {
-      console.log('Content script wallet detection failed:', error);
+      // Content script wallet detection failed
     }
     
     // Fallback response if no wallets detected
@@ -165,12 +159,9 @@ async function handleWalletConnection(preferredWallet?: string): Promise<any> {
       throw new Error('Cannot connect wallet on special browser pages');
     }
     
-    console.log('TruthChain Background: Attempting wallet connection via content script');
-    
     try {
       // First detect available wallets
       const detectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('TruthChain Background: Wallet detection response:', detectionResponse);
       
       if (!detectionResponse || !detectionResponse.available || detectionResponse.available.length === 0) {
         throw new Error('No wallets detected. Please install Xverse or Leather wallet and refresh the page.');
@@ -178,14 +169,11 @@ async function handleWalletConnection(preferredWallet?: string): Promise<any> {
       
       // Attempt connection with preferred wallet or first available
       const walletToConnect = preferredWallet || detectionResponse.available[0];
-      console.log('TruthChain Background: Connecting to wallet:', walletToConnect);
       
       const connectionResponse = await chrome.tabs.sendMessage(tab.id, { 
         action: 'connectWallet',
         preferredWallet: walletToConnect 
       });
-      
-      console.log('TruthChain Background: Connection response:', connectionResponse);
       
       if (connectionResponse && connectionResponse.success && connectionResponse.walletData) {
         return {
@@ -242,61 +230,45 @@ async function handleXverseConnection(): Promise<WalletData> {
     
     // First, check if we can detect wallets via content script
     try {
-      console.log('TruthChain: Trying content script wallet detection...');
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('Content script wallet detection response:', response);
       
       if (response && (response.xverse || response.leather || response.stacks)) {
-        console.log('TruthChain: Wallets found via content script, attempting connection...');
         // Try connecting via content script
         const connectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'connectWallet' });
-        console.log('Content script connection response:', connectionResponse);
         
         if (connectionResponse && connectionResponse.success) {
           const walletData = connectionResponse.wallet;
           await chrome.storage.local.set({ walletData });
-          console.log('TruthChain: Successfully connected via content script!');
           return walletData;
         }
       }
     } catch (error) {
-      console.log('Content script method failed, trying direct injection:', error);
+      // Content script method failed, trying alternative approach
     }
     
-    // Give wallets time to inject, then use content script (which runs in right context)
-    console.log('TruthChain: Waiting 5 seconds for wallet providers to inject...');
+    // Give wallets time to inject, then use content script
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     // Content script runs in the right context and should see wallets
     try {
-      console.log('TruthChain: Using content script for wallet detection after delay...');
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'detectWallets' });
-      console.log('Content script detection after delay:', response);
       
       if (response && (response.xverse || response.leather || response.stacks || response.available?.length > 0)) {
-        console.log('TruthChain: Wallets detected via content script! Attempting connection...');
         const connectionResponse = await chrome.tabs.sendMessage(tab.id, { action: 'connectWallet' });
-        console.log('Content script connection response:', connectionResponse);
         
         if (connectionResponse && connectionResponse.success) {
           const walletData = connectionResponse.wallet;
           await chrome.storage.local.set({ walletData });
-          console.log('TruthChain: Successfully connected via content script!');
           return walletData;
         } else if (connectionResponse && connectionResponse.error) {
           throw new Error('Content script connection failed: ' + connectionResponse.error);
         }
-      } else {
-        console.log('TruthChain: No wallets detected via content script');
       }
     } catch (contentScriptError) {
-      console.log('Content script approach failed:', contentScriptError);
+      // Content script approach failed
     }
     
-    // No more MAIN world injection - rely only on page script communication
-    
     // If all methods fail
-    console.log('TruthChain: All wallet detection methods failed');
     throw new Error(
       'No Stacks wallet found or accessible.\n\n' +
       'Please ensure:\n' +
@@ -565,41 +537,6 @@ async function handleGetUserContent(address: string): Promise<Array<{
   }
 }
 
-// Functions to be injected into web pages
-function detectWalletProviders() {
-  const providers = [];
-  
-  console.log('Checking for wallet providers in page context...');
-  console.log('Window object keys:', Object.keys(window));
-  
-  // Check for Xverse
-  if (window.XverseProviders?.StacksProvider) {
-    console.log('✓ Found Xverse wallet');
-    providers.push('xverse');
-  }
-  
-  // Check for Leather
-  if (window.LeatherProvider || window.HiroWalletProvider) {
-    console.log('✓ Found Leather/Hiro wallet');
-    providers.push('leather');
-  }
-  
-  // Check for generic providers
-  if (window.StacksProvider) {
-    console.log('✓ Found generic Stacks provider');
-    providers.push('stacks');
-  }
-  
-  // Check for alternative names
-  if (window.stacks || window.stacksProvider) {
-    console.log('✓ Found alternative Stacks provider');
-    providers.push('alternative');
-  }
-  
-  console.log('Detected providers:', providers);
-  return providers;
-}
-
 function extractPageContent() {
   const content = {
     title: document.title,
@@ -651,23 +588,6 @@ function extractPageContent() {
   return content;
 }
 
-// Utility functions
-async function generateContentHash(content: ContentData): Promise<string> {
-  const contentString = JSON.stringify({
-    title: content.title,
-    content: content.content,
-    url: content.url
-  });
-  
-  const hashBuffer = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(contentString)
-  );
-  
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 async function executeRegistrationCommand(): Promise<void> {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -698,17 +618,4 @@ async function executeVerifyCommand(): Promise<void> {
   } catch (error) {
     console.error('Failed to execute verify command:', error);
   }
-}
-
-// Handle demo mode when real wallets can't be accessed
-async function handleDemoMode(): Promise<WalletData> {
-  console.log('TruthChain: Offering demo mode');
-  
-  return {
-    address: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-    publicKey: 'demo-public-key-for-testing',
-    isDemoMode: true,
-    provider: 'demo',
-    walletName: 'Demo Mode'
-  };
 }
