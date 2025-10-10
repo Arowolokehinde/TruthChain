@@ -102,15 +102,15 @@ const App = () => {
     setIsLoading(true);
     
     try {
-      // Use the professional wallet connector that handles all the edge cases
+      // Use professional wallet connector for Chrome extension context
       const result = await professionalWalletConnector.connectWallet();
       
       if (result.success && result.address) {
         const walletData = {
           address: result.address,
-          publicKey: result.publicKey || `professional-${Date.now()}`,
-          provider: result.provider || 'unknown',
-          walletName: result.walletName || 'Wallet',
+          publicKey: result.publicKey || `wallet-${Date.now()}`,
+          provider: result.provider || 'stacks-wallet',
+          walletName: result.walletName || 'Stacks Wallet',
           isConnected: true,
           network: result.network || 'mainnet'
         };
@@ -165,68 +165,18 @@ const App = () => {
           `\n✅ Ready for TruthChain operations!`
         );
         
+        setIsLoading(false);
       } else {
-        throw new Error(result.error || 'Professional wallet connector failed');
+        setIsLoading(false);
+        if (result.error && !result.error.includes('cancelled')) {
+          alert(`❌ Connection Failed\n\n${result.error}`);
+        }
       }
-      
-      setIsLoading(false);
       
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      if (errorMsg.includes('not detected') || errorMsg.includes('not found') || errorMsg.includes('install')) {
-        alert(
-          '🔗 No Stacks Wallets Found\n\n' +
-          'TruthChain couldn\'t detect any Stacks wallets in your browser.\n\n' +
-          '✅ Quick Solutions:\n' +
-          '1. Install Xverse or Leather wallet from Chrome Web Store\n' +
-          '2. Make sure your wallet is UNLOCKED\n' +
-          '3. Navigate to a regular website (like medium.com) and try again\n' +
-          '4. Refresh the current page\n\n' +
-          '⚠️ Note: Wallet detection doesn\'t work on chrome:// pages.\n' +
-          'Please visit a regular website first, then open this popup.'
-        );
-      } else if (errorMsg.includes('cancelled') || errorMsg.includes('rejected') || errorMsg.includes('denied')) {
-        alert('⚠️ Connection Cancelled\n\nConnection was cancelled by user.\n\nTo connect:\n• Click "Connect Wallet" again\n• Approve the connection in your wallet popup');
-      } else if (errorMsg.includes('All connection methods failed')) {
-        // Check if this is because we're on a restricted page
-        if (errorMsg.includes('browser internal pages') || errorMsg.includes('chrome://') || errorMsg.includes('extension://')) {
-          alert(
-            '🚫 Restricted Page Detection\n\n' +
-            'Wallet detection is disabled on browser internal pages.\n\n' +
-            '✅ Simple Solution:\n' +
-            '1. Open a new tab and visit any regular website\n' +
-            '   (like medium.com, twitter.com, or google.com)\n' +
-            '2. Open TruthChain popup from that tab\n' +
-            '3. Connect your wallet\n\n' +
-            '⚠️ Browser security prevents wallet access on:\n' +
-            '• chrome:// pages (settings, extensions, etc.)\n' +
-            '• extension:// pages\n' +
-            '• New tab pages'
-          );
-        } else {
-          // Enable debug mode for advanced troubleshooting
-          setShowDebugMode(true);
-          alert(
-            '🔧 Advanced Troubleshooting Required\n\n' +
-            'All connection methods failed. Debug mode is now enabled.\n\n' +
-            '• Check the "Wallet Debug Info" section below\n' +
-            '• Click "Run Provider Diagnostics" for detailed analysis\n\n' +
-            'Common issues:\n' +
-            '• Wallet extension not properly installed\n' +
-            '• Browser security blocking wallet injection\n' +
-            '• Extension conflicts in Chrome\n\n' +
-            'Solutions:\n' +
-            '1. Try Chrome Incognito mode\n' +
-            '2. Disable other wallet extensions temporarily\n' +
-            '3. Check provider diagnostics below\n' +
-            '4. Install Xverse or Leather wallet'
-          );
-        }
-      } else {
-        alert(`❌ Connection Error\n\nError: ${errorMsg}\n\nThis is a technical issue. Please:\n• Check browser console for details\n• Report to TruthChain support if persistent`);
-      }
       setIsLoading(false);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`❌ Wallet Connection Error\n\n${errorMsg}\n\nPlease try again.`);
     }
   };
 
@@ -302,34 +252,16 @@ const App = () => {
   };
 
   const runWalletDiagnostics = async () => {
-    console.log('🔍 TruthChain: Running comprehensive wallet diagnostics...');
-    
-    // Run professional wallet connector diagnostics
-    professionalWalletConnector.debugProviderInjection();
-    
-    // Detect available wallets
-    const walletStatus = await professionalWalletConnector.detectWallets();
-    console.log('Wallet Detection Results:', walletStatus);
-    
-    // Display results to user
+    // Stacks Connect handles wallet detection automatically
     const results = [
       `🔍 WALLET DIAGNOSTIC RESULTS`,
       ``,
-      `Available Wallets: ${walletStatus.available.length === 0 ? 'None detected' : walletStatus.available.join(', ')}`,
-      `Xverse Provider: ${walletStatus.xverse ? 'Detected' : 'Not Found'}`,
-      `Leather Provider: ${walletStatus.leather ? 'Detected' : 'Not Found'}`,
+      `Connection Method: Stacks Connect (Official)`,
+      `Supported Wallets: All Stacks-compatible wallets`,
       ``,
-      `Chrome Version: ${navigator.userAgent.includes('Chrome') ? navigator.userAgent.match(/Chrome\/(\d+\.\d+\.\d+\.\d+)/)?.[1] || 'Unknown' : 'Not Chrome'}`,
-      ``,
-      `📋 Next Steps:`,
-      walletStatus.available.length === 0 
-        ? '• Install Xverse or Leather wallet extension\n• Make sure wallet is unlocked\n• Refresh this page after installation'
-        : '• Check browser console (F12) for detailed logs\n• Try connecting again\n• If issues persist, try incognito mode',
-      ``,
-      `⚠️ If problems continue, this may indicate:`,
-      `• Extension conflicts with other wallet extensions`,
-      `• Chrome security settings blocking injection`,
-      `• Extension needs browser restart to activate properly`
+      `📋 Notes:`,
+      `• Stacks Connect shows official wallet selection modal`,
+      `• Supports Xverse, Leather, Hiro, and other Stacks wallets`,
     ].join('\n');
     
     alert(results);
@@ -337,31 +269,16 @@ const App = () => {
 
   const testBNSLookup = async () => {
     try {
-      // Test BNS lookup for the current wallet if connected
       if (wallet.address) {
-        const result = await professionalWalletConnector.getBNSNameForAddress(wallet.address);
         alert(
-          `🧪 BNS Lookup Test Results\n\n` +
+          `🧪 BNS Info\n\n` +
           `Address: ${wallet.address.slice(0, 12)}...${wallet.address.slice(-8)}\n` +
-          (result.bnsName 
-            ? `✅ BNS Name Found: ${result.fullBNSName}\n` 
-            : `ℹ️ No BNS name found for this address\n`) +
-          (result.error ? `⚠️ Error: ${result.error}\n` : '') +
-          `\nTest completed successfully!`
+          (wallet.bnsName 
+            ? `✅ BNS Name: ${wallet.fullBNSName}\n` 
+            : `ℹ️ No BNS name found for this address\n`)
         );
       } else {
-        // Test with a known BNS address (example)
-        const testAddress = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B'; // Example address
-        const result = await professionalWalletConnector.getBNSNameForAddress(testAddress);
-        alert(
-          `🧪 BNS Lookup Test Results\n\n` +
-          `Test Address: ${testAddress.slice(0, 12)}...${testAddress.slice(-8)}\n` +
-          (result.bnsName 
-            ? `✅ BNS Name Found: ${result.fullBNSName}\n` 
-            : `ℹ️ No BNS name found for this address\n`) +
-          (result.error ? `⚠️ Error: ${result.error}\n` : '') +
-          `\nTest completed successfully!`
-        );
+        alert('⚠️ Please connect wallet first');
       }
     } catch (error) {
       alert(`❌ BNS Test Failed\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`);
