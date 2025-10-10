@@ -2,11 +2,20 @@ import { Request, Response } from 'express';
 import { HashService } from '../services/HashService';
 import { BlockchainService } from '../services/BlockchainService';
 
+// For development/testing with Postman (includes senderKey)
 export interface RegisterTweetRequest {
   tweetContent: string;
   tweetUrl?: string;
   twitterHandle?: string;
   senderKey: string; // Private key for blockchain transaction
+}
+
+// For secure frontend integration (no senderKey)
+export interface SecureRegisterRequest {
+  tweetContent: string;
+  tweetUrl?: string;
+  twitterHandle?: string;
+  txId?: string; // Optional transaction ID if already submitted
 }
 
 export interface RegisterTweetResponse {
@@ -30,7 +39,7 @@ export class RegistrationController {
   }
 
   /**
-   * Register a new tweet on the blockchain
+   * Register a new tweet on the blockchain (Development/Testing)
    * POST /api/register
    */
   async registerTweet(req: Request, res: Response): Promise<Response<RegisterTweetResponse>> {
@@ -183,6 +192,133 @@ export class RegistrationController {
       return res.status(500).json({
         success: false,
         message: 'Error retrieving registration',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Secure registration for frontend integration (no senderKey)
+   * POST /api/secure/register
+   */
+  async secureRegisterTweet(req: Request, res: Response): Promise<Response> {
+    try {
+      const { tweetContent, tweetUrl, twitterHandle, txId }: SecureRegisterRequest = req.body;
+
+      // Validation
+      if (!tweetContent) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tweet content is required',
+          error: 'Missing required fields'
+        });
+      }
+
+      if (tweetContent.length > 280) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tweet content exceeds 280 characters',
+          error: 'Content too long'
+        });
+      }
+
+      // Generate content hash
+      const contentHash = HashService.generateContentHash(tweetContent);
+      const hashHex = HashService.generateContentHashHex(tweetContent);
+
+      // Check if content already exists
+      const exists = await this.blockchainService.hashExists(contentHash);
+      if (exists) {
+        return res.status(409).json({
+          success: false,
+          message: 'This content has already been registered',
+          error: 'Duplicate content',
+          data: {
+            hash: hashHex,
+            tweetUrl,
+            twitterHandle
+          }
+        });
+      }
+
+      // Return hash and metadata for frontend to handle blockchain transaction
+      return res.status(200).json({
+        success: true,
+        message: 'Content ready for blockchain registration',
+        data: {
+          hash: hashHex,
+          tweetUrl,
+          twitterHandle,
+          txId,
+          instructions: 'Use this hash with your wallet to register on-chain'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in secure registration:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Confirm registration after blockchain transaction
+   * POST /api/secure/confirm-registration
+   */
+  async confirmRegistration(req: Request, res: Response): Promise<Response> {
+    try {
+      const { tweetContent, txId }: { tweetContent: string; txId: string } = req.body;
+
+      if (!tweetContent || !txId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tweet content and transaction ID are required'
+        });
+      }
+
+      // Generate hash and verify it exists on blockchain
+      const contentHash = HashService.generateContentHash(tweetContent);
+      const hashHex = HashService.generateContentHashHex(tweetContent);
+
+      // Wait a moment for transaction to be confirmed
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const verification = await this.blockchainService.verifyTweet(contentHash);
+
+      if (!verification) {
+        return res.status(404).json({
+          success: false,
+          message: 'Registration not found on blockchain. Transaction may still be pending.',
+          data: {
+            hash: hashHex,
+            txId
+          }
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Registration confirmed on blockchain',
+        data: {
+          hash: hashHex,
+          txId,
+          author: verification.author,
+          registeredAt: new Date(verification.timestamp > 1000000000000 ? verification.timestamp : verification.timestamp * 1000).toISOString(),
+          blockHeight: verification.blockHeight,
+          registrationId: verification.registrationId,
+        }
+      });
+
+    } catch (error) {
+      console.error('Error confirming registration:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Error confirming registration',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
