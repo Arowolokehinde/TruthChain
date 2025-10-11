@@ -432,81 +432,58 @@ class AdvancedWalletDetector {
   // Modern APIs removed for simplicity - using direct XverseProviders only
 
   private async connectXverseLegacy(): Promise<WalletConnectionResult> {
-    console.log(`TruthChain: [XVERSE] Using enhanced XverseProviders method`);
+    console.log(`TruthChain: [XVERSE] Using Xverse connection with proper API`);
     
-    // Try multiple provider patterns for Xverse
-    let xverse: any = null;
-    const patterns = [
-      () => (window as any).XverseProviders?.StacksProvider,
-      () => (window as any).xverseProviders?.StacksProvider,
-      () => (window as any).stacksProvider,
-      () => (window as any).xverseProvider,
-    ];
+    // Xverse uses a different API structure - check for XverseProviders
+    const xverseProviders = (window as any).XverseProviders || (window as any).xverseProviders;
     
-    for (const pattern of patterns) {
-      try {
-        const provider = pattern();
-        if (provider && typeof provider === 'object' && typeof provider.request === 'function') {
-          xverse = provider;
-          console.log(`TruthChain: [XVERSE] Found working provider pattern:`, pattern.toString());
-          break;
-        }
-      } catch (e) {
-        // Continue to next pattern
-      }
-    }
-    
-    console.log(`TruthChain: [XVERSE] Provider available:`, !!xverse);
-    
-    if (!xverse) {
+    if (!xverseProviders || !xverseProviders.StacksProvider) {
       throw new Error('Xverse wallet not found. Please install Xverse extension and refresh the page.');
     }
 
-    console.log(`TruthChain: [XVERSE] Calling stx_requestAccounts - this should trigger popup`);
+    console.log(`TruthChain: [XVERSE] XverseProviders found, attempting connection`);
     
     try {
-      const accounts = await Promise.race([
-        xverse.request('stx_requestAccounts'),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout - popup may have been blocked')), 30000)
-        )
-      ]) as string[];
-
-      console.log(`TruthChain: [XVERSE] Accounts response:`, accounts);
-
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No Xverse accounts available - please unlock your wallet');
-      }
-
-      // Try to get detailed address info
-      let primaryAddress: any;
-      try {
-        const addressInfo = await xverse.request('stx_getAddresses');
-        console.log(`TruthChain: [XVERSE] Address info:`, addressInfo);
-        
-        if (addressInfo?.addresses?.length) {
-          primaryAddress = addressInfo.addresses[0];
-        } else {
-          // Fallback: use first account as address
-          primaryAddress = { address: accounts[0] };
-        }
-      } catch (addressError) {
-        console.log(`TruthChain: [XVERSE] Address info failed, using account directly:`, addressError);
-        primaryAddress = { address: accounts[0] };
-      }
+      const stacksProvider = xverseProviders.StacksProvider;
       
-      console.log(`TruthChain: [XVERSE] Connection successful! Address:`, primaryAddress.address);
+      // Request account access - this opens the Xverse popup
+      console.log(`TruthChain: [XVERSE] Requesting accounts (this should open Xverse popup)...`);
+      
+      const response = await Promise.race([
+        stacksProvider.request('stx_requestAccounts', null),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Xverse connection timeout after 60 seconds')), 60000)
+        )
+      ]) as any;
+
+      console.log(`TruthChain: [XVERSE] Request accounts response:`, response);
+
+      // Xverse returns an object with addresses array
+      if (!response || !response.addresses || response.addresses.length === 0) {
+        throw new Error('No Xverse accounts available - please unlock your wallet and approve the connection');
+      }
+
+      const address = response.addresses[0];
+      console.log(`TruthChain: [XVERSE] Successfully connected! Address:`, address);
 
       return {
         success: true,
         provider: 'xverse',
-        address: primaryAddress.address,
-        publicKey: primaryAddress.publicKey || `xverse-${Date.now()}`,
+        address: address.address || address,
+        publicKey: address.publicKey || `xverse-${Date.now()}`,
         network: 'mainnet'
       };
-    } catch (error) {
-      console.error(`TruthChain: [XVERSE] Connection failed:`, error);
-      throw error;
+    } catch (error: any) {
+      console.error(`TruthChain: [XVERSE] Connection error:`, error);
+      
+      // Provide helpful error messages
+      if (error.message?.includes('timeout')) {
+        throw new Error('Xverse connection timed out. Please check if:\n1. Xverse extension is installed\n2. Xverse wallet is unlocked\n3. You approved the connection request');
+      } else if (error.message?.includes('User rejected') || error.code === 4001) {
+        throw new Error('Connection cancelled by user');
+      } else {
+        throw new Error(`Xverse connection failed: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
