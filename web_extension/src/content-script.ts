@@ -1,7 +1,5 @@
 // @ts-nocheck
 
-console.log('TruthChain content script loaded on:', window.location.hostname);
-
 // Inject TruthChain verification UI
 function injectTruthChainUI(): void {
   if (document.getElementById('truthchain-ui')) {
@@ -743,9 +741,6 @@ const observer = new MutationObserver(() => {
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-// Enhanced content detection for Truth-Chain workflows
-console.log('TruthChain content script loaded');
-
 // Content detection and hashing utilities
 class ContentDetector {
   static async extractContent() {
@@ -1000,7 +995,6 @@ const checkForWallets = () => {
   }
   
   if (wallets.length > 0) {
-    console.log('TruthChain: Detected wallets:', wallets);
     clearInterval(walletCheckInterval);
     
     // Store wallet availability in page context
@@ -1021,13 +1015,10 @@ setTimeout(() => {
 
 // Enhanced message handling with page script communication
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Content script received message:', request.action);
-  
   switch (request.action) {
     case 'detectWallets':
       detectWalletsViaPageScript()
         .then(result => {
-          console.log('Wallet detection result:', result);
           sendResponse(result);
         })
         .catch(error => {
