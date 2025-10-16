@@ -8,7 +8,7 @@ requirements = []
 [contracts.truth-chain]
 path = 'contracts/truth-chain.clar'
 clarity_version = 3
-epoch = 3.1
+epoch = '3.1'
 [repl.analysis]
 passes = ['check_checker']
 
@@ -17,3 +17,7 @@ strict = false
 trusted_sender = false
 trusted_caller = false
 callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'

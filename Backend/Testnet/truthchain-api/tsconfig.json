@@ -1,0 +1,16 @@
+{
+  "extends": "./src/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./"
+  },
+  "include": [
+    "src/**/*",
+    "test-hash.ts",
+    "test-blockchain.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
