@@ -11,6 +11,7 @@
 import { showConnect, disconnect, UserSession, AppConfig } from '@stacks/connect';
 import { request as satsRequest, AddressPurpose } from 'sats-connect';
 import { bnsService } from './bns-service';
+import { config } from '../config/environment'; // Re-import config
 
 export interface WalletAddress {
   address: string;
@@ -27,6 +28,7 @@ export interface WalletConnectionResult {
   fullBNSName?: string;
   error?: string;
   walletType: 'xverse' | 'leather' | 'unknown';
+  network?: 'mainnet' | 'testnet'; // Added network field
 }
 
 export class ProfessionalWalletService {
@@ -142,7 +144,8 @@ export class ProfessionalWalletService {
                 address: address,
                 bnsName: bnsInfo.bnsName,
                 fullBNSName: bnsInfo.fullBNSName,
-                walletType: 'leather'
+                walletType: 'leather',
+                network: config.network.name === 'mainnet' ? 'mainnet' : 'testnet' // Only allow 'mainnet' or 'testnet'
               });
             } else {
               resolve({

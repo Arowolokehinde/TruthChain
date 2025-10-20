@@ -162,8 +162,20 @@ const App = () => {
           `🔗 Provider: ${walletData.provider}\n` +
           (result.bnsName ? `🏷️ BNS Name: ${result.fullBNSName}\n` : '') +
           (result.bnsName && !hasExistingUser ? `\n💡 Your BNS name will be suggested as your TruthChain username!\n` : '') +
+          (!result.bnsName && !hasExistingUser ? `\n⚠️ No BNS name found. Please acquire one to proceed with TruthChain features.\n` : '') +
           `\n✅ Ready for TruthChain operations!`
         );
+        
+        // If no BNS name and no existing user, keep username setup open and prevent further actions
+        if (!result.bnsName && !hasExistingUser) {
+          setShowUsernameSetup(true);
+          setUsernameError('A BNS name is required to proceed. Please acquire one in your wallet.');
+        } else if (result.bnsName && !hasExistingUser) {
+          // If BNS name exists but no existing user, suggest BNS name and open setup
+          setUsernameInput(result.bnsName);
+          setUsernameError('');
+          setShowUsernameSetup(true);
+        }
         
         setIsLoading(false);
       } else {
@@ -467,23 +479,30 @@ const App = () => {
                         <div className='w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center'>
                           <span className='text-xs text-white'>!</span>
                         </div>
-                        <span className='text-xs font-semibold text-yellow-800'>Username Required</span>
+                        <span className='text-xs font-semibold text-yellow-800'>
+                          {wallet.bnsName ? 'Username Required' : 'BNS Name Required'}
+                        </span>
                       </div>
-                      <p className='text-xs text-yellow-700 mb-2'>Create a unique username to use TruthChain features</p>
+                      <p className='text-xs text-yellow-700 mb-2'>
+                        {wallet.bnsName 
+                          ? 'Create a unique username to use TruthChain features'
+                          : 'A BNS name is required to use TruthChain features. Please acquire one in your wallet.'
+                        }
+                      </p>
                       <button
                         onClick={() => {
-                          // Pre-populate with BNS name if available
                           if (wallet.bnsName) {
                             setUsernameInput(wallet.bnsName);
                             setUsernameError('');
                           } else {
                             setUsernameInput('');
+                            setUsernameError('A BNS name is required to proceed. Please acquire one in your wallet.');
                           }
                           setShowUsernameSetup(true);
                         }}
                         className='w-full bg-yellow-200 text-yellow-800 py-2 px-3 rounded-lg text-xs font-semibold hover:bg-yellow-300 transition-colors duration-200'
                       >
-                        Create Username
+                        {wallet.bnsName ? 'Create Username' : 'Acquire BNS Name'}
                       </button>
                     </div>
                   )}
@@ -994,7 +1013,7 @@ const App = () => {
                   </button>
                   <button
                     onClick={createUsername}
-                    disabled={isLoading || !usernameInput.trim() || !!usernameError}
+                    disabled={isLoading || !usernameInput.trim() || !!usernameError || (!wallet.bnsName && !currentUser)}
                     className='flex-1 bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 transition-all duration-200'
                   >
                     {isLoading ? (

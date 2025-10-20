@@ -1,3 +1,5 @@
+import { config } from '../config/environment';
+
 /**
  * BNS (Bitcoin Name Service) Integration Service
  * 
@@ -30,9 +32,11 @@ export class BNSService {
   private static instance: BNSService;
   private readonly testnetApiUrl = 'https://api.testnet.hiro.so';
   private readonly mainnetApiUrl = 'https://api.mainnet.hiro.so';
-  private isMainnet = false; // Default to testnet for development
+  private isMainnet = config.network.name === 'mainnet'; // Initialize based on environment config
 
-  private constructor() {}
+  private constructor() {
+    console.log(`🌐 BNS Service initialized: Network set to ${this.isMainnet ? 'mainnet' : 'testnet'}`);
+  }
 
   public static getInstance(): BNSService {
     if (!BNSService.instance) {

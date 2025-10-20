@@ -47,8 +47,8 @@ const NETWORKS: Record<string, NetworkConfig> = {
     name: 'testnet',
     stacksApi: 'https://api.testnet.hiro.so',
     explorerUrl: 'https://explorer.hiro.so',
-    contractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-    contractName: 'truth-chain'
+    contractAddress: 'ST3S9E18YKY18RQBR6WVZQ816C19R3FB3K3M0K3XX',
+    contractName: 'Truth-Chain'
   },
   devnet: {
     name: 'devnet',
@@ -63,11 +63,11 @@ const NETWORKS: Record<string, NetworkConfig> = {
 export const config: EnvironmentConfig = {
   isDevelopment,
   isProduction: !isDevelopment,
-  network: NETWORKS[isDevelopment ? 'testnet' : 'mainnet'],
+  network: NETWORKS['testnet'], // Using testnet with deployed contract
   features: {
-    demoMode: isDevelopment,
+    demoMode: false, // Disable demo mode for production
     debugLogging: isDevelopment,
-    simulatedTransactions: isDevelopment
+    simulatedTransactions: false // Disable simulated transactions for production
   },
   wallets: {
     xverse: {
