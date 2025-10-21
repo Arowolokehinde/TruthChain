@@ -517,64 +517,67 @@ class AdvancedWalletDetector {
     try {
       // Use the documented Leather wallet API method: getAddresses
       // According to Leather documentation, this is the official method to get addresses
-      console.log(`TruthChain: [LEATHER] Attempting connection using stacks_getAddresses method...`);
+      console.log(`TruthChain: [LEATHER] Attempting connection using getAddresses method...`);
       
       let result;
       try {
-        // Try the Stacks-specific method first (most reliable)
-        console.log(`TruthChain: [LEATHER] Calling stacks_getAddresses method`);
-        const connectPromise = leather.request('stacks_getAddresses');
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
-        );
+        // Try the standard getAddresses method (most reliable for Leather)
+        // Removed timeout to allow user time to approve the popup
+        console.log(`TruthChain: [LEATHER] Calling getAddresses method (waiting for user approval)...`);
+        console.log(`TruthChain: [LEATHER] 👉 Please check for a Leather popup and approve the connection!`);
         
-        result = await Promise.race([connectPromise, timeoutPromise]);
-        console.log(`TruthChain: [LEATHER] stacks_getAddresses response:`, result);
+        result = await leather.request('getAddresses');
+        console.log(`TruthChain: [LEATHER] ✅ getAddresses successful:`, result);
         
-      } catch (addressError) {
-        console.log(`TruthChain: [LEATHER] stacks_getAddresses failed, trying getAddresses:`, addressError);
+      } catch (getAddrError) {
+        console.log(`TruthChain: [LEATHER] getAddresses failed:`, getAddrError);
         
-        // Try standard getAddresses
+        // Try Stacks-specific method as fallback
         try {
-          console.log(`TruthChain: [LEATHER] Trying getAddresses method`);
-          const getAddrPromise = leather.request('getAddresses');
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('getAddresses timeout')), 10000)
-          );
+          console.log(`TruthChain: [LEATHER] Trying stacks_getAddresses method...`);
+          result = await leather.request('stacks_getAddresses');
+          console.log(`TruthChain: [LEATHER] ✅ stacks_getAddresses successful:`, result);
           
-          result = await Promise.race([getAddrPromise, timeoutPromise]);
-          console.log(`TruthChain: [LEATHER] getAddresses response:`, result);
+        } catch (addressError) {
+          console.error(`TruthChain: [LEATHER] Both connection methods failed.`);
+          console.error(`TruthChain: [LEATHER] getAddresses error:`, getAddrError);  
+          console.error(`TruthChain: [LEATHER] stacks_getAddresses error:`, addressError);
           
-        } catch (getAddrError) {
-          console.log(`TruthChain: [LEATHER] getAddresses failed, trying accounts:`, getAddrError);
+          // Check if user rejected
+          const isRejection = (getAddrError as any)?.code === 4001 || 
+                             (addressError as any)?.code === 4001 ||
+                             (addressError as any)?.error?.message?.includes('reject');
           
-          // Try accounts method
-          try {
-            console.log(`TruthChain: [LEATHER] Trying accounts method`);
-            const accountResult = await Promise.race([
-              leather.request('accounts'),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Account access timeout')), 10000)
-              )
-            ]);
-            
-            console.log(`TruthChain: [LEATHER] accounts response:`, accountResult);
-            result = accountResult;
-            
-          } catch (accountError) {
-            console.error(`TruthChain: [LEATHER] All connection methods failed.`);
-            console.error(`TruthChain: [LEATHER] stacks_getAddresses error:`, addressError);
-            console.error(`TruthChain: [LEATHER] getAddresses error:`, getAddrError);  
-            console.error(`TruthChain: [LEATHER] accounts error:`, accountError);
-            
-            throw new Error('Unable to connect to Leather wallet. Please ensure your Leather wallet is unlocked, up-to-date, and try refreshing the page.');
+          if (isRejection) {
+            throw new Error('Connection rejected. Please click "Connect" again and approve the Leather popup.');
           }
+          
+          throw new Error('Unable to connect to Leather wallet. Please ensure:\n• Leather is unlocked\n• You have a Stacks account\n• Popups are not blocked\n• Try refreshing the page');
         }
       }
       
       console.log(`TruthChain: [LEATHER] Connection result:`, result);
       console.log(`TruthChain: [LEATHER] Result type:`, typeof result);
       console.log(`TruthChain: [LEATHER] Result is array:`, Array.isArray(result));
+
+      // Helper function to check if address is a Stacks address
+      const isStacksAddress = (addr: string): boolean => {
+        return !!(addr && (addr.startsWith('SP') || addr.startsWith('ST')));
+      };
+
+      // Helper function to extract Stacks address from address list
+      const findStacksAddress = (addresses: any[]): any => {
+        console.log(`TruthChain: [LEATHER] Searching ${addresses.length} addresses for Stacks address...`);
+        addresses.forEach((addr, i) => {
+          const addrStr = typeof addr === 'string' ? addr : addr?.address;
+          console.log(`  [${i}] ${addrStr} - ${isStacksAddress(addrStr) ? '✅ STACKS' : '❌ not stacks'}`);
+        });
+        
+        return addresses.find((addr: any) => {
+          const addrStr = typeof addr === 'string' ? addr : addr?.address;
+          return isStacksAddress(addrStr);
+        });
+      };
 
       // Parse Leather wallet response format based on official documentation
       let address: string;
@@ -590,29 +593,27 @@ class AdvancedWalletDetector {
         if ('addresses' in result && Array.isArray(result.addresses) && result.addresses.length > 0) {
           console.log(`TruthChain: [LEATHER] Found addresses array with ${result.addresses.length} addresses`);
           
-          // Look for Stacks address first (STX addresses start with 'ST' or 'SP')
-          const stacksAddr = result.addresses.find((addr: any) => {
-            const addrStr = typeof addr === 'string' ? addr : addr.address;
-            return addrStr && (addrStr.startsWith('ST') || addrStr.startsWith('SP'));
-          });
+          // ALWAYS look for Stacks address first (STX addresses start with 'ST' or 'SP')
+          const stacksAddr = findStacksAddress(result.addresses);
           
           if (stacksAddr) {
-            console.log(`TruthChain: [LEATHER] Using Stacks address:`, stacksAddr);
+            console.log(`TruthChain: [LEATHER] ✅ Found Stacks address:`, stacksAddr);
             address = typeof stacksAddr === 'string' ? stacksAddr : stacksAddr.address;
             publicKey = (stacksAddr.publicKey || stacksAddr.pubkey) || publicKey;
           } else {
-            // Fallback to first address
-            const firstAddr = result.addresses[0];
-            console.log(`TruthChain: [LEATHER] Using first available address:`, firstAddr);
-            address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
-            publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+            console.error(`TruthChain: [LEATHER] ❌ NO STACKS ADDRESS FOUND! Only non-Stacks addresses available.`);
+            throw new Error('No Stacks address found in Leather wallet. Please ensure your Leather wallet has a Stacks account configured.');
           }
         }
         // Check for direct address field
         else if ('address' in result) {
-          console.log(`TruthChain: [LEATHER] Found direct address field`);
-          address = result.address;
-          publicKey = result.publicKey || result.pubkey || publicKey;
+          console.log(`TruthChain: [LEATHER] Found direct address field:`, result.address);
+          if (isStacksAddress(result.address)) {
+            address = result.address;
+            publicKey = result.publicKey || result.pubkey || publicKey;
+          } else {
+            throw new Error(`Address is not a Stacks address: ${result.address}. Please ensure you're using a Stacks account in Leather.`);
+          }
         }
         // Check for result field (nested response)
         else if ('result' in result) {
@@ -621,14 +622,23 @@ class AdvancedWalletDetector {
           if (nestedResult && typeof nestedResult === 'object' && 'addresses' in nestedResult) {
             const addresses = nestedResult.addresses;
             if (Array.isArray(addresses) && addresses.length > 0) {
-              const firstAddr = addresses[0];
-              address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
-              publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+              const stacksAddr = findStacksAddress(addresses);
+              if (stacksAddr) {
+                console.log(`TruthChain: [LEATHER] ✅ Found Stacks address in nested result:`, stacksAddr);
+                address = typeof stacksAddr === 'string' ? stacksAddr : stacksAddr.address;
+                publicKey = (stacksAddr.publicKey || stacksAddr.pubkey) || publicKey;
+              } else {
+                throw new Error('No Stacks address found in nested result');
+              }
             } else {
               throw new Error('No addresses found in nested result');
             }
           } else if (typeof nestedResult === 'string') {
-            address = nestedResult;
+            if (isStacksAddress(nestedResult)) {
+              address = nestedResult;
+            } else {
+              throw new Error(`Nested result is not a Stacks address: ${nestedResult}`);
+            }
           } else {
             throw new Error('Unexpected nested result format from Leather');
           }
@@ -636,9 +646,14 @@ class AdvancedWalletDetector {
         // Handle array format
         else if (Array.isArray(result) && result.length > 0) {
           console.log(`TruthChain: [LEATHER] Found array format with ${result.length} addresses`);
-          const firstAddr = result[0];
-          address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
-          publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+          const stacksAddr = findStacksAddress(result);
+          if (stacksAddr) {
+            console.log(`TruthChain: [LEATHER] ✅ Found Stacks address in array:`, stacksAddr);
+            address = typeof stacksAddr === 'string' ? stacksAddr : stacksAddr.address;
+            publicKey = (stacksAddr.publicKey || stacksAddr.pubkey) || publicKey;
+          } else {
+            throw new Error('No Stacks address found in address array');
+          }
         }
         else {
           console.error(`TruthChain: [LEATHER] Unexpected response structure:`, result);
@@ -648,15 +663,24 @@ class AdvancedWalletDetector {
       }
       // Handle string response
       else if (typeof result === 'string') {
-        console.log(`TruthChain: [LEATHER] Got string address directly`);
-        address = result;
+        console.log(`TruthChain: [LEATHER] Got string address directly:`, result);
+        if (isStacksAddress(result)) {
+          address = result;
+        } else {
+          throw new Error(`Direct address is not a Stacks address: ${result}`);
+        }
       }
       // Handle array response
       else if (Array.isArray(result) && result.length > 0) {
         console.log(`TruthChain: [LEATHER] Got array of addresses`);
-        const firstAddr = result[0];
-        address = typeof firstAddr === 'string' ? firstAddr : firstAddr.address;
-        publicKey = (firstAddr.publicKey || firstAddr.pubkey) || publicKey;
+        const stacksAddr = findStacksAddress(result);
+        if (stacksAddr) {
+          console.log(`TruthChain: [LEATHER] ✅ Found Stacks address in top-level array:`, stacksAddr);
+          address = typeof stacksAddr === 'string' ? stacksAddr : stacksAddr.address;
+          publicKey = (stacksAddr.publicKey || stacksAddr.pubkey) || publicKey;
+        } else {
+          throw new Error('No Stacks address found in top-level array');
+        }
       }
       else {
         console.error(`TruthChain: [LEATHER] Invalid or empty result:`, result);
@@ -666,8 +690,13 @@ class AdvancedWalletDetector {
       if (!address) {
         throw new Error('No valid address found in Leather response');
       }
+      
+      // Final validation - make absolutely sure it's a Stacks address
+      if (!isStacksAddress(address)) {
+        throw new Error(`Final validation failed: ${address} is not a Stacks address (must start with SP or ST)`);
+      }
 
-      console.log(`TruthChain: [LEATHER] Successfully connected, address: ${address}`);
+      console.log(`TruthChain: [LEATHER] ✅ Successfully connected with Stacks address: ${address}`);
 
       return {
         success: true,

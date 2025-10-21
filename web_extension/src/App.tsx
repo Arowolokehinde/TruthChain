@@ -77,6 +77,16 @@ const App = () => {
     // Check if wallet is already connected and get username
     chrome.storage.local.get(['walletData'], async (result: ChromeStorageResult) => {
       if (result.walletData) {
+        // Validate that we have a Stacks address (starts with SP or ST)
+        const isValidStacksAddress = result.walletData.address && 
+          (result.walletData.address.startsWith('SP') || result.walletData.address.startsWith('ST'));
+        
+        if (!isValidStacksAddress) {
+          console.warn('⚠️ Invalid cached wallet data (not a Stacks address), clearing...');
+          chrome.storage.local.remove(['walletData']);
+          return;
+        }
+        
         setWallet({
           isConnected: true,
           address: result.walletData.address,
