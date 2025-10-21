@@ -176,9 +176,34 @@ async function handleWalletConnection(preferredWallet?: string): Promise<any> {
       });
       
       if (connectionResponse && connectionResponse.success && connectionResponse.walletData) {
+        const walletData = connectionResponse.walletData;
+        
+        // Perform BNS lookup for the connected wallet address
+        console.log('🔍 TruthChain: Looking up BNS name for address:', walletData.address);
+        
+        try {
+          const { bnsService } = await import('./services/bns-service');
+          const bnsResult = await bnsService.lookupNameByAddress(walletData.address);
+          
+          if (bnsResult.success && bnsResult.bnsName) {
+            console.log('✅ TruthChain: BNS name found:', bnsResult.bnsName);
+            walletData.bnsName = bnsResult.bnsName;
+            walletData.fullBNSName = bnsResult.fullBNSName;
+          } else {
+            console.log('⚠️ TruthChain: No BNS name found for this address');
+            walletData.bnsName = null;
+            walletData.fullBNSName = null;
+          }
+        } catch (bnsError) {
+          console.error('❌ TruthChain: BNS lookup failed:', bnsError);
+          // Don't fail the connection if BNS lookup fails
+          walletData.bnsName = null;
+          walletData.fullBNSName = null;
+        }
+        
         return {
           success: true,
-          walletData: connectionResponse.walletData,
+          walletData: walletData,
           provider: connectionResponse.provider || walletToConnect,
           walletName: connectionResponse.walletName || 'Stacks Wallet'
         };
@@ -213,6 +238,51 @@ async function handleGetUsernameByWallet(walletAddress: string): Promise<any> {
       error: error.message
     };
   }
+}
+
+/**
+ * Sign content registration transaction with user's wallet
+ * This uses Stacks Connect to open the wallet and request signature
+ */
+async function signContentWithWallet(contentHash: string): Promise<string> {
+  const { openContractCall } = await import('@stacks/connect');
+  const { bufferCV, stringAsciiCV } = await import('@stacks/transactions');
+  const { STACKS_MAINNET, STACKS_TESTNET } = await import('@stacks/network');
+  const { config } = await import('./config/environment');
+
+  // Convert hex hash to buffer
+  const hashBuffer = Buffer.from(contentHash.replace(/^0x/, ''), 'hex');
+  
+  // Prepare contract call options
+  const network = config.network.name === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
+  
+  return new Promise((resolve, reject) => {
+    openContractCall({
+      contractAddress: config.network.contractAddress,
+      contractName: config.network.contractName,
+      functionName: 'register-content',
+      functionArgs: [
+        bufferCV(hashBuffer),
+        stringAsciiCV('tweet') // content type
+      ],
+      network,
+      appDetails: {
+        name: 'TruthChain',
+        icon: chrome.runtime.getURL('Truthchain.jpeg'),
+      },
+      onFinish: (data: { txId: string }) => {
+        console.log('✅ TruthChain: Transaction signed and submitted:', data.txId);
+        resolve(data.txId);
+      },
+      onCancel: () => {
+        console.log('❌ TruthChain: User cancelled transaction');
+        reject(new Error('Transaction cancelled by user'));
+      },
+    }).catch((error: Error) => {
+      console.error('❌ TruthChain: Failed to open contract call:', error);
+      reject(error);
+    });
+  });
 }
 
 async function handleXverseConnection(): Promise<WalletData> {
@@ -314,30 +384,51 @@ async function handleContentRegistration(request?: {contentData?: ContentData}):
       throw new Error('No wallet connected - please connect your Stacks wallet first');
     }
 
-    // Use the new API service to register content
+    // Use the SECURE API flow (no private keys!)
     const apiService = TruthChainAPIService.getInstance();
     
-    console.log('🔗 TruthChain: Registering content via API service...');
+    console.log('� TruthChain: Starting SECURE registration (wallet-based signing)...');
     
-    const registrationResponse = await apiService.registerContent({
-      content: content.content || content.excerpt || '',
-      title: content.title || 'Untitled Content',
-      url: content.url || '',
-      contentType: determineContentType(content),
-      metadata: {
-        author: content.author || 'Unknown',
-        platform: content.hostname || 'Unknown',
-        timestamp: content.timestamp || new Date().toISOString(),
-        walletAddress: storage.walletData.address,
-        extensionVersion: '1.0.0'
-      }
+    // Step 1: Prepare registration - get hash from backend
+    const tweetContent = content.content || content.excerpt || '';
+    const prepareResponse = await apiService.prepareSecureRegistration({
+      tweetContent: tweetContent,
+      tweetUrl: content.url || '',
+      twitterHandle: content.author || storage.walletData.address
     });
 
-    if (!registrationResponse.success || !registrationResponse.data) {
-      throw new Error(registrationResponse.error || 'API registration failed');
+    if (!prepareResponse.success || !prepareResponse.data) {
+      throw new Error(prepareResponse.error || 'Failed to prepare registration');
     }
 
-    const apiData = registrationResponse.data;
+    const { hash } = prepareResponse.data;
+    console.log('✅ TruthChain: Registration prepared, hash:', hash);
+
+    // Step 2: Sign transaction with wallet (using openContractCall)
+    console.log('📝 TruthChain: Requesting wallet signature...');
+    const txId = await signContentWithWallet(hash);
+    console.log('✅ TruthChain: Transaction signed, txId:', txId);
+
+    // Step 3: Confirm registration with backend
+    console.log('🔍 TruthChain: Confirming registration on blockchain...');
+    const confirmResponse = await apiService.confirmRegistration({
+      tweetContent: tweetContent,
+      txId: txId
+    });
+
+    if (!confirmResponse.success || !confirmResponse.data) {
+      console.warn('⚠️ TruthChain: Confirmation pending, transaction may still be processing');
+      // Don't fail here - transaction is submitted, confirmation may just be pending
+    }
+
+    const apiData = confirmResponse.data || {
+      hash: hash,
+      txId: txId,
+      author: storage.walletData.address,
+      registrationId: 0,
+      blockHeight: 0,
+      registeredAt: new Date().toISOString()
+    };
     
     // Create registration result compatible with existing interface
     const registrationResult: RegistrationResult = {

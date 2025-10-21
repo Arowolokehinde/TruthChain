@@ -62,12 +62,15 @@ export class BNSService {
 
   /**
    * Lookup BNS name by Stacks address
+   * Now checks both regular BNS names and BNS NFTs
    */
   public async lookupNameByAddress(address: string): Promise<BNSLookupResult> {
     try {
       console.log(`🔍 BNS Lookup: Searching for BNS name for address ${address}`);
       
       const apiUrl = this.getApiUrl();
+      
+      // First, try regular BNS names
       const response = await fetch(`${apiUrl}/v1/addresses/stacks/${address}`);
       
       if (!response.ok) {
@@ -80,6 +83,7 @@ export class BNSService {
       if (data.names && data.names.length > 0) {
         const bnsName = data.names[0]; // Get the first/primary BNS name
         
+        console.log(`✅ BNS: Found regular BNS name: ${bnsName}`);
         return {
           success: true,
           bnsName: bnsName.split('.')[0], // Name part (before the dot)
@@ -89,7 +93,15 @@ export class BNSService {
         };
       }
       
+      // If no regular BNS name, check for BNS NFTs
+      console.log(`🔍 BNS: No regular name found, checking for BNS NFTs...`);
+      const nftResult = await this.lookupBNSNFT(address, apiUrl);
+      if (nftResult.success && nftResult.bnsName) {
+        return nftResult;
+      }
+      
       // No BNS name found for this address
+      console.log(`⚠️ BNS: No BNS name or NFT found for address`);
       return {
         success: true,
         bnsName: undefined,
@@ -103,6 +115,108 @@ export class BNSService {
         error: error instanceof Error ? error.message : 'Unknown error during BNS lookup'
       };
     }
+  }
+
+  /**
+   * Lookup BNS NFT names for an address
+   * BNS NFTs are stored differently and require NFT endpoint
+   */
+  private async lookupBNSNFT(address: string, apiUrl: string): Promise<BNSLookupResult> {
+    try {
+      console.log(`🔍 BNS NFT: Checking for BNS NFTs at ${apiUrl}`);
+      
+      // Query NFT holdings for the address
+      // BNS NFTs are in the SP000000000000000000002Q6VF78.bns contract
+      const nftResponse = await fetch(
+        `${apiUrl}/extended/v1/tokens/nft/holdings?principal=${address}&limit=50`
+      );
+      
+      if (!nftResponse.ok) {
+        console.log(`⚠️ BNS NFT: API request failed: ${nftResponse.status}`);
+        return {
+          success: false,
+          error: 'NFT lookup failed'
+        };
+      }
+      
+      const nftData = await nftResponse.json();
+      console.log(`🔍 BNS NFT: Found ${nftData.results?.length || 0} NFTs for address`);
+      
+      // Look for BNS NFTs in the holdings
+      if (nftData.results && nftData.results.length > 0) {
+        for (const nft of nftData.results) {
+          console.log(`🔍 BNS NFT: Checking NFT:`, {
+            assetId: nft.asset_identifier,
+            value: nft.value?.repr
+          });
+          
+          // Check if this is a BNS NFT (contract: SP000000000000000000002Q6VF78.bns)
+          if (nft.asset_identifier && nft.asset_identifier.includes('::bns::')) {
+            console.log(`✅ BNS NFT: Found BNS NFT for address ${address}`);
+            
+            // Extract BNS name from the NFT value
+            // The value is typically encoded, we need to decode it
+            if (nft.value && nft.value.repr) {
+              console.log(`🔍 BNS NFT: Parsing repr:`, nft.value.repr);
+              
+              // Parse the BNS name from the repr value
+              // Example: (tuple (name 0x68656e7279) (namespace 0x627463))
+              const nameMatch = nft.value.repr.match(/name\s+0x([0-9a-f]+)/i);
+              const namespaceMatch = nft.value.repr.match(/namespace\s+0x([0-9a-f]+)/i);
+              
+              if (nameMatch && namespaceMatch) {
+                const nameHex = nameMatch[1];
+                const namespaceHex = namespaceMatch[1];
+                
+                // Convert hex to string
+                const name = this.hexToString(nameHex);
+                const namespace = this.hexToString(namespaceHex);
+                const fullName = `${name}.${namespace}`;
+                
+                console.log(`✅ BNS NFT: Decoded name: ${fullName}`);
+                
+                return {
+                  success: true,
+                  bnsName: name,
+                  fullName: fullName,
+                  namespace: namespace,
+                  address: address
+                };
+              } else {
+                console.log(`⚠️ BNS NFT: Could not match name/namespace in repr`);
+              }
+            } else {
+              console.log(`⚠️ BNS NFT: No repr value found`);
+            }
+          }
+        }
+      } else {
+        console.log(`⚠️ BNS NFT: No NFTs found for address`);
+      }
+      
+      return {
+        success: false,
+        error: 'No BNS NFT found'
+      };
+      
+    } catch (error) {
+      console.error('❌ BNS NFT Lookup failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during BNS NFT lookup'
+      };
+    }
+  }
+
+  /**
+   * Convert hex string to ASCII string
+   */
+  private hexToString(hex: string): string {
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) {
+      str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return str;
   }
 
   /**

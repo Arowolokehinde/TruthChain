@@ -3,6 +3,15 @@
 
 console.log('TruthChain: Page script loaded in MAIN world');
 
+// Network configuration - set to mainnet
+const NETWORK_CONFIG = {
+  name: 'mainnet',
+  stacksApi: 'https://api.mainnet.hiro.so',
+  explorerUrl: 'https://explorer.hiro.so',
+  contractAddress: 'SP1S7KX8TVSAWJ8CVJZQSFERBQ8BNCDXYFHXT21Z9',
+  contractName: 'truthchain_v1'
+};
+
 // Import advanced wallet detector functionality
 
 interface WalletDetectionResult {
@@ -508,70 +517,55 @@ class AdvancedWalletDetector {
     try {
       // Use the documented Leather wallet API method: getAddresses
       // According to Leather documentation, this is the official method to get addresses
-      console.log(`TruthChain: [LEATHER] Attempting connection using official getAddresses method...`);
+      console.log(`TruthChain: [LEATHER] Attempting connection using stacks_getAddresses method...`);
       
       let result;
       try {
-        // Call the official Leather getAddresses method 
-        console.log(`TruthChain: [LEATHER] Calling getAddresses method`);
-        const connectPromise = leather.request('getAddresses');
+        // Try the Stacks-specific method first (most reliable)
+        console.log(`TruthChain: [LEATHER] Calling stacks_getAddresses method`);
+        const connectPromise = leather.request('stacks_getAddresses');
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout after 20 seconds')), 20000)
+          setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
         );
         
         result = await Promise.race([connectPromise, timeoutPromise]);
-        console.log(`TruthChain: [LEATHER] getAddresses response:`, result);
+        console.log(`TruthChain: [LEATHER] stacks_getAddresses response:`, result);
         
       } catch (addressError) {
-        console.log(`TruthChain: [LEATHER] getAddresses failed, trying alternative approaches:`, addressError);
+        console.log(`TruthChain: [LEATHER] stacks_getAddresses failed, trying getAddresses:`, addressError);
         
-        // Check if it's a user rejection or wallet locked error
-        if (addressError && typeof addressError === 'object') {
-          const errorObj = addressError as any;
-          if (errorObj.error) {
-            const rpcError = errorObj.error;
-            if (rpcError.code === -32002) {
-              throw new Error('User rejected the connection request. Please try connecting again and approve the request in Leather wallet.');
-            } else if (rpcError.code === -32603 || rpcError.message?.includes('locked')) {
-              throw new Error('Leather wallet appears to be locked. Please unlock your Leather wallet and try again.');
-            }
-          }
-        }
-        
-        // If getAddresses failed, try direct account access
+        // Try standard getAddresses
         try {
-          console.log(`TruthChain: [LEATHER] Trying direct account access`);
-          const accountResult = await Promise.race([
-            leather.request('accounts'),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Account access timeout')), 15000)
-            )
-          ]);
+          console.log(`TruthChain: [LEATHER] Trying getAddresses method`);
+          const getAddrPromise = leather.request('getAddresses');
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('getAddresses timeout')), 10000)
+          );
           
-          console.log(`TruthChain: [LEATHER] accounts response:`, accountResult);
-          result = accountResult;
+          result = await Promise.race([getAddrPromise, timeoutPromise]);
+          console.log(`TruthChain: [LEATHER] getAddresses response:`, result);
           
-        } catch (accountError) {
-          console.log(`TruthChain: [LEATHER] accounts failed, trying enable:`, accountError);
+        } catch (getAddrError) {
+          console.log(`TruthChain: [LEATHER] getAddresses failed, trying accounts:`, getAddrError);
           
-          // Final attempt: try enable method (common in wallet APIs)
+          // Try accounts method
           try {
-            console.log(`TruthChain: [LEATHER] Trying enable method`);
-            const enableResult = await Promise.race([
-              leather.request('enable'),
+            console.log(`TruthChain: [LEATHER] Trying accounts method`);
+            const accountResult = await Promise.race([
+              leather.request('accounts'),
               new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Enable timeout')), 15000)
+                setTimeout(() => reject(new Error('Account access timeout')), 10000)
               )
             ]);
             
-            console.log(`TruthChain: [LEATHER] enable response:`, enableResult);
-            result = enableResult;
+            console.log(`TruthChain: [LEATHER] accounts response:`, accountResult);
+            result = accountResult;
             
-          } catch (enableError) {
+          } catch (accountError) {
             console.error(`TruthChain: [LEATHER] All connection methods failed.`);
-            console.error(`TruthChain: [LEATHER] getAddresses error:`, addressError);
-            console.error(`TruthChain: [LEATHER] accounts error:`, accountError);  
-            console.error(`TruthChain: [LEATHER] enable error:`, enableError);
+            console.error(`TruthChain: [LEATHER] stacks_getAddresses error:`, addressError);
+            console.error(`TruthChain: [LEATHER] getAddresses error:`, getAddrError);  
+            console.error(`TruthChain: [LEATHER] accounts error:`, accountError);
             
             throw new Error('Unable to connect to Leather wallet. Please ensure your Leather wallet is unlocked, up-to-date, and try refreshing the page.');
           }
@@ -680,7 +674,7 @@ class AdvancedWalletDetector {
         provider: 'leather',
         address,
         publicKey,
-        network: 'testnet'
+        network: NETWORK_CONFIG.name === 'mainnet' ? 'mainnet' : 'testnet'
       };
       
     } catch (error) {
@@ -738,7 +732,7 @@ class AdvancedWalletDetector {
       provider: 'stacks',
       address,
       publicKey: `stacks-${Date.now()}`,
-      network: 'testnet'
+      network: NETWORK_CONFIG.name === 'mainnet' ? 'mainnet' : 'testnet'
     };
   }
 }
@@ -797,7 +791,7 @@ async function connectWallet(providerType: string): Promise<any> {
           provider: result.provider,
           walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1),
           isConnected: true,
-          network: result.network || 'testnet'
+          network: result.network || NETWORK_CONFIG.name || 'mainnet'
         }
       };
     } else {

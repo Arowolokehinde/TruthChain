@@ -40,8 +40,8 @@ const NETWORKS: Record<string, NetworkConfig> = {
     name: 'mainnet',
     stacksApi: 'https://api.mainnet.hiro.so',
     explorerUrl: 'https://explorer.hiro.so',
-    contractAddress: 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9', // Replace with actual mainnet address
-    contractName: 'truth-chain'
+    contractAddress: 'SP1S7KX8TVSAWJ8CVJZQSFERBQ8BNCDXYFHXT21Z9', // Real deployed mainnet address
+    contractName: 'truthchain_v1'
   },
   testnet: {
     name: 'testnet',
@@ -63,7 +63,7 @@ const NETWORKS: Record<string, NetworkConfig> = {
 export const config: EnvironmentConfig = {
   isDevelopment,
   isProduction: !isDevelopment,
-  network: NETWORKS['testnet'], // Using testnet with deployed contract
+  network: NETWORKS['mainnet'], // Switched to mainnet for BNS testing
   features: {
     demoMode: false, // Disable demo mode for production
     debugLogging: isDevelopment,

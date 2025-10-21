@@ -67,6 +67,8 @@ export class ProfessionalWalletConnector {
           success: true,
           address: response.walletData.address,
           publicKey: response.walletData.publicKey,
+          bnsName: response.walletData.bnsName,
+          fullBNSName: response.walletData.fullBNSName,
           provider: response.walletData.provider || response.provider,
           walletName: response.walletData.walletName || response.walletName,
           network: response.walletData.network || 'mainnet'

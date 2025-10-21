@@ -1,5 +1,14 @@
 // @ts-nocheck
 
+// Network configuration - set to mainnet
+const NETWORK_CONFIG = {
+  name: 'mainnet',
+  stacksApi: 'https://api.mainnet.hiro.so',
+  explorerUrl: 'https://explorer.hiro.so',
+  contractAddress: 'SP1S7KX8TVSAWJ8CVJZQSFERBQ8BNCDXYFHXT21Z9',
+  contractName: 'truthchain_v1'
+};
+
 // Inject TruthChain verification UI
 function injectTruthChainUI(): void {
   if (document.getElementById('truthchain-ui')) {
@@ -1456,7 +1465,7 @@ async function connectWalletEnhanced(): Promise<any> {
           provider: result.provider,
           walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1),
           isConnected: true,
-          network: result.network || 'testnet'
+          network: result.network || NETWORK_CONFIG.name || 'mainnet'
         },
         provider: result.provider,
         walletName: result.provider.charAt(0).toUpperCase() + result.provider.slice(1)
@@ -1521,7 +1530,7 @@ async function connectXverseEnhanced() {
         provider: 'xverse',
         walletName: 'Xverse',
         isConnected: true,
-        network: 'testnet', // TODO: Detect actual network
+        network: NETWORK_CONFIG.name === 'mainnet' ? 'mainnet' : 'testnet',
         accounts: addressInfo.addresses
       }
     };
@@ -1589,7 +1598,7 @@ async function connectLeatherEnhanced() {
         provider: 'leather',
         walletName: 'Leather',
         isConnected: true,
-        network: 'testnet',
+        network: NETWORK_CONFIG.name === 'mainnet' ? 'mainnet' : 'testnet',
         rawResponse: result
       }
     };
@@ -1643,7 +1652,7 @@ async function connectGenericEnhanced() {
         provider: 'stacks',
         walletName: 'Stacks Wallet',
         isConnected: true,
-        network: 'testnet',
+        network: NETWORK_CONFIG.name === 'mainnet' ? 'mainnet' : 'testnet',
         accounts
       }
     };

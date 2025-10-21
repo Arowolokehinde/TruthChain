@@ -22,6 +22,33 @@ export interface ContentRegistrationRequest {
   };
 }
 
+export interface SecureRegistrationRequest {
+  tweetContent: string;
+  tweetUrl?: string;
+  twitterHandle?: string;
+}
+
+export interface SecureRegistrationResponse {
+  hash: string;
+  tweetUrl?: string;
+  twitterHandle?: string;
+  instructions: string;
+}
+
+export interface ConfirmRegistrationRequest {
+  tweetContent: string;
+  txId: string;
+}
+
+export interface ConfirmRegistrationResponse {
+  hash: string;
+  txId: string;
+  author: string;
+  registeredAt: string;
+  blockHeight: number;
+  registrationId: number;
+}
+
 export interface ContentRegistrationResponse {
   registrationId: number;
   hash: string;
@@ -81,10 +108,12 @@ export class TruthChainAPIService {
   }
 
   /**
-   * Register content on the blockchain
+   * Register content on the blockchain (DEPRECATED - Use prepareSecureRegistration instead)
+   * @deprecated This method uses private keys and should not be used in production
    */
   public async registerContent(request: ContentRegistrationRequest): Promise<APIResponse<ContentRegistrationResponse>> {
     try {
+      console.log('⚠️ TruthChain API: Using deprecated registerContent method');
       console.log('🔗 TruthChain API: Registering content...', request);
 
       const response = await fetch(`${this.baseURL}/api/register`, {
@@ -122,6 +151,93 @@ export class TruthChainAPIService {
 
     } catch (error) {
       console.error('❌ TruthChain API: Registration failed', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Prepare secure registration (Step 1: Get hash without private key)
+   * This is the SECURE way to register content - no private keys needed!
+   */
+  public async prepareSecureRegistration(request: SecureRegistrationRequest): Promise<APIResponse<SecureRegistrationResponse>> {
+    try {
+      console.log('🔒 TruthChain API: Preparing secure registration...', request);
+
+      const response = await fetch(`${this.baseURL}/api/secure/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          tweetContent: request.tweetContent,
+          tweetUrl: request.tweetUrl,
+          twitterHandle: request.twitterHandle,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ TruthChain API: Registration prepared successfully', data);
+
+      return {
+        success: true,
+        data: data.data,
+        message: 'Ready for wallet signature'
+      };
+
+    } catch (error) {
+      console.error('❌ TruthChain API: Preparation failed', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Confirm registration after blockchain transaction (Step 2: Verify on-chain)
+   * Call this after user signs the transaction with their wallet
+   */
+  public async confirmRegistration(request: ConfirmRegistrationRequest): Promise<APIResponse<ConfirmRegistrationResponse>> {
+    try {
+      console.log('✅ TruthChain API: Confirming registration...', request);
+
+      const response = await fetch(`${this.baseURL}/api/secure/confirm-registration`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          tweetContent: request.tweetContent,
+          txId: request.txId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ TruthChain API: Registration confirmed on blockchain', data);
+
+      return {
+        success: true,
+        data: data.data,
+        message: 'Content verified on blockchain'
+      };
+
+    } catch (error) {
+      console.error('❌ TruthChain API: Confirmation failed', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
